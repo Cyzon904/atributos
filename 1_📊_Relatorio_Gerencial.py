@@ -134,7 +134,7 @@ def process_data(conversas, mapping, admin_map):
         row = {
             "ID": c['id'],
             "timestamp_real": c['created_at'], 
-            "Data": datetime.fromtimestamp(c['created_at']).strftime("%d/%m/%Y %H:%M"),
+            "Data": (datetime.fromtimestamp(c['created_at']) - timedelta(hours=3)).strftime("%d/%m/%Y %H:%M"),
             "Estado": estado_pt,
             "Atendente": assignee_name,
             "Link": link,
