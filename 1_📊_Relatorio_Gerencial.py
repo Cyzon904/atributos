@@ -124,8 +124,11 @@ def process_data(conversas, mapping, admin_map):
         mapa_estados = {'closed': 'Fechada', 'open': 'Aberta', 'snoozed': 'Pausada'}
         estado_pt = mapa_estados.get(estado_raw, estado_raw.capitalize())
 
-        # Identifica a origem (quem mandou a primeira mensagem)
-        autor_tipo = c.get('source', {}).get('author', {}).get('type', '')
+        # Identifica a origem (quem mandou a primeira mensagem) de forma segura
+        source = c.get('source') or {}
+        author = source.get('author') or {}
+        autor_tipo = author.get('type', '')
+        
         if autor_tipo == 'admin':
             origem = "Ativa (Analista)"
         else:
@@ -142,7 +145,7 @@ def process_data(conversas, mapping, admin_map):
             "ID": c['id'],
             "timestamp_real": c['created_at'], 
             "Data": (datetime.fromtimestamp(c['created_at']) - timedelta(hours=3)).strftime("%d/%m/%Y %H:%M"),
-            "Origem": origem,  # <--- AQUI ESTÁ A NOVA COLUNA QUE ESTAVA FALTANDO
+            "Origem": origem,
             "Estado": estado_pt,
             "Atendente": assignee_name,
             "Link": link,
