@@ -276,9 +276,9 @@ if 'df_final' in st.session_state:
         df_tempo['Data_Agrupamento'] = (pd.to_datetime(df_tempo['timestamp_real'], unit='s') - timedelta(hours=3)).dt.date
         vol_tempo = df_tempo.groupby('Data_Agrupamento').size().reset_index(name='Volume')
         
-        fig_linha = px.line(vol_tempo, x='Data_Agrupamento', y='Volume', markers=True, title="Volume Diário de Conversas")
-        fig_linha.update_xaxes(title="Data", tickformat="%d/%m/%Y")
-        st.plotly_chart(fig_linha, use_container_width=True)
+        fig_bar = px.bar(vol_tempo, x='Data_Agrupamento', y='Volume', text='Volume', title="Volume Diário de Conversas")
+        fig_bar.update_xaxes(title="Data", tickformat="%d/%m/%Y")
+        st.plotly_chart(fig_bar, use_container_width=True)
         
         st.divider()
         
