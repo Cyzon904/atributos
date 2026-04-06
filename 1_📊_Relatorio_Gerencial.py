@@ -119,6 +119,9 @@ def process_data(conversas, mapping, admin_map):
         admin_id = c.get('admin_assignee_id')
         assignee_name = admin_map.get(str(admin_id), f"ID {admin_id}") if admin_id else "Não atribuído"
 
+        # NOVA REGRA: Pega o ID da Equipe
+        team_id = c.get('team_assignee_id')
+        nome_equipe = str(team_id) if team_id else "Sem equipe"
         # Captura e traduz o estado nativo da conversa
         estado_raw = c.get('state', '')
         mapa_estados = {'closed': 'Fechada', 'open': 'Aberta', 'snoozed': 'Pausada'}
@@ -145,6 +148,7 @@ def process_data(conversas, mapping, admin_map):
             "ID": c['id'],
             "timestamp_real": c['created_at'], 
             "Data": (datetime.fromtimestamp(c['created_at']) - timedelta(hours=3)).strftime("%d/%m/%Y %H:%M"),
+            "Equipe": nome_equipe,
             "Origem": origem,
             "Estado": estado_pt,
             "Atendente": assignee_name,
@@ -649,8 +653,13 @@ if 'df_final' in st.session_state:
     if aba_selecionada == "📋 Dados":
         with st.form("form_filtros_tabela"):
             st.write("🔍 Filtros da Pesquisa")
-            c1, c2, c3, c4 = st.columns(4)
+            # Adicionamos mais uma coluna aqui (c_eq)
+            c_eq, c1, c2, c3, c4 = st.columns(5)
             
+            with c_eq:
+                equipes_unicas = sorted(df["Equipe"].astype(str).unique())
+                sel_equipes = st.multiselect("🏢 Equipe (ID):", equipes_unicas)
+                
             with c1:
                 agentes_unicos = sorted(df["Atendente"].astype(str).unique())
                 sel_agentes = st.multiselect("👤 Analista:", agentes_unicos)
@@ -680,6 +689,10 @@ if 'df_final' in st.session_state:
 
         df_view = df.copy()
         
+        # Nova regra para aplicar o filtro da equipe
+        if sel_equipes:
+            df_view = df_view[df_view["Equipe"].isin(sel_equipes)]
+            
         if sel_agentes:
             df_view = df_view[df_view["Atendente"].isin(sel_agentes)]
             
@@ -701,7 +714,7 @@ if 'df_final' in st.session_state:
             excel = gerar_excel_multias(df_view, cols_usuario)
             st.download_button("📥 Baixar Excel", data=excel, file_name="relatorio_filtrado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary", use_container_width=True)
         
-        cols_display = ["Data", "Estado", "Atendente", "Link", "Tempo Resolução"] + cols_usuario
+        cols_display = ["Data", "Estado", "Equipe", "Atendente", "Link", "Tempo Resolução"] + cols_usuario
         cols_existentes = [c for c in cols_display if c in df_view.columns]
         
         st.dataframe(
