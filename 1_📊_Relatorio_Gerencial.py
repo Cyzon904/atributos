@@ -216,22 +216,33 @@ if btn_run:
 if 'df_final' in st.session_state:
     df_completo = st.session_state['df_final']
     
-    # Cria um filtro global na barra lateral para os analistas
+    # Cria filtros globais na barra lateral
     with st.sidebar:
-        st.markdown("### 👥 Filtro de Equipe")
+        st.markdown("### ⚙️ Filtros Globais")
+        
         todos_analistas = sorted(df_completo["Atendente"].astype(str).unique())
         analistas_selecionados = st.multiselect(
-            "Mostrar apenas estes analistas:", 
+            "👤 Analistas:", 
             options=todos_analistas,
             default=todos_analistas,
-            help="Remova quem não faz parte da sua equipe para limpar os dados."
+            help="Remove quem não faz parte da equipa."
+        )
+        
+        todas_origens = sorted(df_completo["Origem"].astype(str).unique())
+        origens_selecionadas = st.multiselect(
+            "🔄 Origem do Contato:", 
+            options=todas_origens,
+            default=todas_origens
         )
     
-    # Aplica o filtro no dataframe principal para todas as abas
+    # Aplica os filtros no dataframe principal
+    df = df_completo.copy()
+    
     if analistas_selecionados:
-        df = df_completo[df_completo["Atendente"].isin(analistas_selecionados)].copy()
-    else:
-        df = df_completo.copy()
+        df = df[df["Atendente"].isin(analistas_selecionados)]
+        
+    if origens_selecionadas:
+        df = df[df["Origem"].isin(origens_selecionadas)]
         
     st.divider()
     
