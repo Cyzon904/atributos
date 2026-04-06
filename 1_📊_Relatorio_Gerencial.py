@@ -349,25 +349,6 @@ if 'df_final' in st.session_state:
         vol = df['Atendente'].value_counts().reset_index()
         vol.columns = ['Agente', 'Volume']
         st.plotly_chart(px.bar(vol, x='Agente', y='Volume', text='Volume', height=500), use_container_width=True)
-        
-        st.divider()
-        
-        st.subheader("🚀 Matriz de Eficiência: Volume x Tempo")
-        st.info("💡 **Como ler:** O canto inferior direito mostra quem atendeu mais chamados em menos tempo. O canto superior esquerdo mostra quem atendeu um volume menor, mas levou mais tempo. Isso é muito comum para quem assume os casos mais complexos.")
-        
-        if "Tempo Resolução (seg)" in df.columns:
-            df_perf = df.groupby("Atendente").agg(Volume=('ID', 'count'), Tempo_Medio_Seg=('Tempo Resolução (seg)', 'mean')).reset_index()
-            df_perf = df_perf[df_perf['Tempo_Medio_Seg'] > 0]
-            df_perf['Tempo Médio'] = df_perf['Tempo_Medio_Seg'].apply(format_sla_string)
-            
-            fig_scatter = px.scatter(df_perf, x="Volume", y="Tempo_Medio_Seg", text="Atendente", size="Volume", color="Tempo_Medio_Seg", color_continuous_scale="RdYlGn_r", hover_data=["Tempo Médio"], title="Relação: Quem atende mais vs Quem demora mais", height=700)
-            media_vol = df_perf["Volume"].mean()
-            media_tempo = df_perf["Tempo_Medio_Seg"].mean()
-            fig_scatter.add_vline(x=media_vol, line_dash="dash", line_color="gray", annotation_text="Média Vol.")
-            fig_scatter.add_hline(y=media_tempo, line_dash="dash", line_color="gray", annotation_text="Média Tempo")
-            st.plotly_chart(fig_scatter, use_container_width=True)
-        else:
-            st.warning("Dados de tempo não disponíveis.")
 
     if aba_selecionada == "🔀 Cruzamentos":
         qtd_cross = st.slider("Quantidade de itens no Ranking:", 5, 50, 10, key="slider_cross")
