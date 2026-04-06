@@ -331,8 +331,8 @@ if 'df_final' in st.session_state:
             resumo_analistas['Pendentes'] = resumo_analistas['Total'] - resumo_analistas['Classificados']
             resumo_analistas['Taxa (%)'] = (resumo_analistas['Classificados'] / resumo_analistas['Total'] * 100).round(1)
             
-            # Ordenar pelos que têm a maior taxa no topo
-            resumo_analistas = resumo_analistas.sort_values(by="Taxa (%)", ascending=False)
+            # Ordenar pelo maior volume Total de conversas
+            resumo_analistas = resumo_analistas.sort_values(by="Total", ascending=False)
             
             # Adicionar o símbolo de % para apresentar na tabela
             resumo_analistas_view = resumo_analistas.copy()
