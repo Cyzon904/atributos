@@ -268,6 +268,21 @@ if 'df_final' in st.session_state:
     )
 
     if aba_selecionada == "📊 Distribuição":
+        # --- NOVO: GRÁFICO DE EVOLUÇÃO NO TEMPO ---
+        st.subheader("📈 Evolução de Volume no Tempo")
+        
+        df_tempo = df.copy()
+        # Converte o timestamp para data agrupada por dia
+        df_tempo['Data_Agrupamento'] = (pd.to_datetime(df_tempo['timestamp_real'], unit='s') - timedelta(hours=3)).dt.date
+        vol_tempo = df_tempo.groupby('Data_Agrupamento').size().reset_index(name='Volume')
+        
+        fig_linha = px.line(vol_tempo, x='Data_Agrupamento', y='Volume', markers=True, title="Volume Diário de Conversas")
+        fig_linha.update_xaxes(title="Data", tickformat="%d/%m/%Y")
+        st.plotly_chart(fig_linha, use_container_width=True)
+        
+        st.divider()
+        
+        # --- GRÁFICOS DE DISTRIBUIÇÃO ORIGINAIS ---
         c_filt1, c_filt2 = st.columns([3, 1])
         with c_filt1:
             graf_sel = st.selectbox("Selecione o Atributo:", cols_usuario, key="sel_graf_dist")
@@ -520,6 +535,46 @@ if 'df_final' in st.session_state:
                     
                     tabela_csat = tabela_csat.sort_values("Total_Avaliacoes", ascending=False)
                     st.dataframe(tabela_csat, use_container_width=True, hide_index=True)
+                    
+                    st.divider()
+
+                    # --- NOVA SEÇÃO: LEITURA DE COMENTÁRIOS ---
+                    st.subheader("💬 Comentários dos Clientes")
+                    
+                    df_comentarios = df_csat.dropna(subset=["CSAT Comentario"]).copy()
+                    
+                    if df_comentarios.empty:
+                        st.info("Nenhum cliente deixou comentário em texto neste período.")
+                    else:
+                        filtro_nota = st.selectbox(
+                            "Filtrar comentários por tipo:", 
+                            ["Apenas Negativos (1 e 2)", "Apenas Neutros (3)", "Apenas Positivos (4 e 5)", "Mostrar Todos"]
+                        )
+                        
+                        if "Negativos" in filtro_nota:
+                            df_comentarios = df_comentarios[df_comentarios["CSAT Nota"] <= 2]
+                        elif "Neutros" in filtro_nota:
+                            df_comentarios = df_comentarios[df_comentarios["CSAT Nota"] == 3]
+                        elif "Positivos" in filtro_nota:
+                            df_comentarios = df_comentarios[df_comentarios["CSAT Nota"] >= 4]
+                            
+                        if df_comentarios.empty:
+                            st.warning("Nenhum comentário encontrado com este filtro.")
+                        else:
+                            cols_comentarios = ["Data", "Atendente", "Motivo de Contato", "CSAT Nota", "CSAT Comentario", "Link"]
+                            cols_disp_comentarios = [c for c in cols_comentarios if c in df_comentarios.columns]
+                            
+                            df_comentarios = df_comentarios.sort_values(by="Data", ascending=False)
+                            
+                            st.dataframe(
+                                df_comentarios[cols_disp_comentarios],
+                                use_container_width=True,
+                                hide_index=True,
+                                column_config={
+                                    "Link": st.column_config.LinkColumn("Link", display_text="🔗 Abrir"),
+                                    "CSAT Comentario": st.column_config.TextColumn("Texto da Avaliação", width="large")
+                                }
+                            )
 
     if aba_selecionada == "⏱️ SLA":
         st.header("Análise de Tempo")
