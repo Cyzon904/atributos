@@ -510,11 +510,16 @@ if 'df_final' in st.session_state:
                     tabela_csat = df_csat.groupby("Motivo de Contato").agg(
                         Total_Avaliacoes=('CSAT Nota', 'count'),
                         Notas_Positivas=('CSAT Nota', lambda x: (x >= 4).sum()),
+                        Notas_Neutras=('CSAT Nota', lambda x: (x == 3).sum()),
                         Notas_Negativas=('CSAT Nota', lambda x: (x <= 2).sum()),
                     ).reset_index()
                     
                     tabela_csat["% Positivas"] = (tabela_csat["Notas_Positivas"] / tabela_csat["Total_Avaliacoes"] * 100).round(1).astype(str) + "%"
+                    tabela_csat["% Neutras"] = (tabela_csat["Notas_Neutras"] / tabela_csat["Total_Avaliacoes"] * 100).round(1).astype(str) + "%"
                     tabela_csat["% Negativas"] = (tabela_csat["Notas_Negativas"] / tabela_csat["Total_Avaliacoes"] * 100).round(1).astype(str) + "%"
+                    
+                    # Reorganizar as colunas para uma leitura mais lógica
+                    tabela_csat = tabela_csat[["Motivo de Contato", "Total_Avaliacoes", "Notas_Positivas", "% Positivas", "Notas_Neutras", "% Neutras", "Notas_Negativas", "% Negativas"]]
                     
                     tabela_csat = tabela_csat.sort_values("Total_Avaliacoes", ascending=False)
                     st.dataframe(tabela_csat, use_container_width=True, hide_index=True)
