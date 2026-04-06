@@ -436,13 +436,38 @@ if 'df_final' in st.session_state:
                     
                 df_csat["Tipo de Avaliação"] = df_csat["CSAT Nota"].apply(classificar_nota)
                 
+                # --- NOVO GRÁFICO GERAL EM ROSCA ---
+                st.subheader("Visão Geral das Notas")
+                resumo_geral = df_csat["Tipo de Avaliação"].value_counts().reset_index()
+                resumo_geral.columns = ["Tipo", "Quantidade"]
+                
+                cores = {
+                    "Positiva (4-5)": "#28a745", 
+                    "Neutra (3)": "#ffc107",     
+                    "Negativa (1-2)": "#dc3545"  
+                }
+
+                fig_pizza = px.pie(
+                    resumo_geral, 
+                    values="Quantidade", 
+                    names="Tipo", 
+                    color="Tipo",
+                    color_discrete_map=cores,
+                    hole=0.4,
+                    height=350
+                )
+                st.plotly_chart(fig_pizza, use_container_width=True)
+                
+                st.divider()
+                
                 if "Motivo de Contato" in df_csat.columns:
                     c_conf1, c_conf2 = st.columns([2, 1])
                     with c_conf1:
                         visao_csat = st.selectbox(
-                            "O que você quer focar agora?", 
+                            "O que queres focar agora?", 
                             [
                                 "🚨 Foco em DSAT: Motivos com mais avaliações NEGATIVAS", 
+                                "⚠️ Foco em Neutras: Motivos com mais avaliações NEUTRAS",
                                 "⭐ Foco em CSAT: Motivos com mais avaliações POSITIVAS",
                                 "📊 Visão Geral: Motivos com maior volume total"
                             ]
@@ -450,26 +475,27 @@ if 'df_final' in st.session_state:
                     with c_conf2:
                         qtd_csat = st.slider("Qtd. Motivos no Gráfico:", 5, 50, 10, key="slider_csat_qtd")
 
-                    # Conta quantas avaliações de cada tipo cada motivo teve
                     csat_group = df_csat.groupby(["Motivo de Contato", "Tipo de Avaliação"]).size().reset_index(name='Quantidade')
                     total_por_motivo = csat_group.groupby("Motivo de Contato")['Quantidade'].sum().reset_index(name='Total')
                     
-                    # Define quais motivos vão aparecer dependendo do filtro
                     if "NEGATIVAS" in visao_csat:
-                        negativas = csat_group[csat_group["Tipo de Avaliação"] == "Negativa (1-2)"]
-                        top_motivos = negativas.sort_values("Quantidade", ascending=False).head(qtd_csat)["Motivo de Contato"].tolist()
+                        filtro = csat_group[csat_group["Tipo de Avaliação"] == "Negativa (1-2)"]
+                        top_motivos = filtro.sort_values("Quantidade", ascending=False).head(qtd_csat)["Motivo de Contato"].tolist()
+                    elif "NEUTRAS" in visao_csat:
+                        filtro = csat_group[csat_group["Tipo de Avaliação"] == "Neutra (3)"]
+                        top_motivos = filtro.sort_values("Quantidade", ascending=False).head(qtd_csat)["Motivo de Contato"].tolist()
                     elif "POSITIVAS" in visao_csat:
-                        positivas = csat_group[csat_group["Tipo de Avaliação"] == "Positiva (4-5)"]
-                        top_motivos = positivas.sort_values("Quantidade", ascending=False).head(qtd_csat)["Motivo de Contato"].tolist()
+                        filtro = csat_group[csat_group["Tipo de Avaliação"] == "Positiva (4-5)"]
+                        top_motivos = filtro.sort_values("Quantidade", ascending=False).head(qtd_csat)["Motivo de Contato"].tolist()
                     else:
                         top_motivos = total_por_motivo.sort_values("Total", ascending=False).head(qtd_csat)["Motivo de Contato"].tolist()
                     
-                    # Filtra os dados apenas para os motivos selecionados
                     df_grafico = csat_group[csat_group["Motivo de Contato"].isin(top_motivos)]
                     
-                    # Organiza a ordem das barras para o mais importante ficar no topo
                     if "NEGATIVAS" in visao_csat:
                         ordem = df_grafico[df_grafico["Tipo de Avaliação"] == "Negativa (1-2)"].sort_values("Quantidade", ascending=True)["Motivo de Contato"].tolist()
+                    elif "NEUTRAS" in visao_csat:
+                        ordem = df_grafico[df_grafico["Tipo de Avaliação"] == "Neutra (3)"].sort_values("Quantidade", ascending=True)["Motivo de Contato"].tolist()
                     elif "POSITIVAS" in visao_csat:
                         ordem = df_grafico[df_grafico["Tipo de Avaliação"] == "Positiva (4-5)"].sort_values("Quantidade", ascending=True)["Motivo de Contato"].tolist()
                     else:
@@ -478,16 +504,8 @@ if 'df_final' in st.session_state:
                     para_adicionar = [m for m in top_motivos if m not in ordem]
                     ordem = para_adicionar + ordem
                     
-                    # Cores para facilitar a leitura visual
-                    cores = {
-                        "Positiva (4-5)": "#28a745", # Verde
-                        "Neutra (3)": "#ffc107",     # Amarelo
-                        "Negativa (1-2)": "#dc3545"  # Vermelho
-                    }
-                    
                     h_c = max(400, len(ordem) * 50)
                     
-                    # Cria o gráfico de barras
                     fig = px.bar(
                         df_grafico,
                         y="Motivo de Contato",
@@ -505,7 +523,6 @@ if 'df_final' in st.session_state:
                     
                     st.divider()
                     
-                    # Cria uma tabela detalhada com os números exatos e porcentagens
                     st.subheader("📋 Detalhamento por Motivo")
                     tabela_csat = df_csat.groupby("Motivo de Contato").agg(
                         Total_Avaliacoes=('CSAT Nota', 'count'),
@@ -518,7 +535,6 @@ if 'df_final' in st.session_state:
                     tabela_csat["% Neutras"] = (tabela_csat["Notas_Neutras"] / tabela_csat["Total_Avaliacoes"] * 100).round(1).astype(str) + "%"
                     tabela_csat["% Negativas"] = (tabela_csat["Notas_Negativas"] / tabela_csat["Total_Avaliacoes"] * 100).round(1).astype(str) + "%"
                     
-                    # Reorganizar as colunas para uma leitura mais lógica
                     tabela_csat = tabela_csat[["Motivo de Contato", "Total_Avaliacoes", "Notas_Positivas", "% Positivas", "Notas_Neutras", "% Neutras", "Notas_Negativas", "% Negativas"]]
                     
                     tabela_csat = tabela_csat.sort_values("Total_Avaliacoes", ascending=False)
