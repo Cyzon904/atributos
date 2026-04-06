@@ -214,7 +214,25 @@ if btn_run:
             st.warning("Nenhum dado encontrado.")
 
 if 'df_final' in st.session_state:
-    df = st.session_state['df_final']
+    df_completo = st.session_state['df_final']
+    
+    # Cria um filtro global na barra lateral para os analistas
+    with st.sidebar:
+        st.markdown("### 👥 Filtro de Equipe")
+        todos_analistas = sorted(df_completo["Atendente"].astype(str).unique())
+        analistas_selecionados = st.multiselect(
+            "Mostrar apenas estes analistas:", 
+            options=todos_analistas,
+            default=todos_analistas,
+            help="Remova quem não faz parte da sua equipe para limpar os dados."
+        )
+    
+    # Aplica o filtro no dataframe principal para todas as abas
+    if analistas_selecionados:
+        df = df_completo[df_completo["Atendente"].isin(analistas_selecionados)].copy()
+    else:
+        df = df_completo.copy()
+        
     st.divider()
     
     # Seleção de Colunas
@@ -585,7 +603,7 @@ if 'df_final' in st.session_state:
                 st.subheader("⚡ Velocidade por Agente")
                 tag = df_t.groupby("Atendente")[col_res].mean().reset_index().sort_values(col_res)
                 tag["Label"] = tag[col_res].apply(format_sla_string)
-                f_tag = px.bar(tag, x=col_res, y="Atendente", text="Label", orientation='h', title="Média de Tempo (Menor é melhor)", height=max(500, len(tag)*50))
+                f_tag = px.bar(tag, x=col_res, y="Atendente", text="Label", orientation='h', title="Média de Tempo)", height=max(500, len(tag)*50))
                 f_tag.update_xaxes(showticklabels=False)
                 st.plotly_chart(f_tag, use_container_width=True)
                 
