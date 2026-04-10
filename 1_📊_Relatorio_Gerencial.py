@@ -672,9 +672,14 @@ if 'df_final' in st.session_state:
                     sel_tipos = []
                     
             with c3:
+                opcoes_motivo = set()
                 if "Motivo de Contato" in df.columns:
-                    motivos_unicos = sorted(df["Motivo de Contato"].dropna().astype(str).unique())
-                    sel_motivos = st.multiselect("🎯 Motivo:", motivos_unicos)
+                    opcoes_motivo.update(df["Motivo de Contato"].dropna().astype(str).unique())
+                if "Motivo 2 (Se houver)" in df.columns:
+                    opcoes_motivo.update(df["Motivo 2 (Se houver)"].dropna().astype(str).unique())
+                
+                if opcoes_motivo:
+                    sel_motivos = st.multiselect("🎯 Motivo:", sorted(list(opcoes_motivo)))
                 else:
                     sel_motivos = []
                     
@@ -700,7 +705,9 @@ if 'df_final' in st.session_state:
             df_view = df_view[df_view["Tipo de Atendimento"].isin(sel_tipos)]
             
         if sel_motivos:
-            df_view = df_view[df_view["Motivo de Contato"].isin(sel_motivos)]
+            condicao1 = df_view["Motivo de Contato"].isin(sel_motivos) if "Motivo de Contato" in df_view.columns else pd.Series(False, index=df_view.index)
+            condicao2 = df_view["Motivo 2 (Se houver)"].isin(sel_motivos) if "Motivo 2 (Se houver)" in df_view.columns else pd.Series(False, index=df_view.index)
+            df_view = df_view[condicao1 | condicao2]
             
         if sel_status:
             df_view = df_view[df_view["Status do atendimento"].isin(sel_status)]
