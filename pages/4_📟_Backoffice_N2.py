@@ -288,26 +288,28 @@ if 'df_n2' in st.session_state:
     st.divider()
 
     # --- FILTROS ESPECÍFICOS DA TABELA ---
-    st.markdown("#### 🔍 Filtros da Lista Detalhada")
-    
-    # Criamos 4 colunas para deixar os filtros organizados lado a lado
-    cf1, cf2, cf3, cf4 = st.columns(4)
-    
-    with cf1:
-        opcoes_analista = sorted(df['Analista N2'].astype(str).unique())
-        filtro_analista = st.multiselect("Analista N2", options=opcoes_analista)
+    with st.form("form_filtros_n2"):
+        st.markdown("#### 🔍 Filtros da Lista Detalhada")
         
-    with cf2:
-        opcoes_jira = sorted(df['Status Jira'].astype(str).unique())
-        filtro_jira = st.multiselect("Status Jira", options=opcoes_jira)
+        cf1, cf2, cf3, cf4 = st.columns(4)
         
-    with cf3:
-        opcoes_plat = sorted(df['Plataforma'].astype(str).unique())
-        filtro_plat = st.multiselect("Plataforma", options=opcoes_plat)
-        
-    with cf4:
-        opcoes_sev = sorted(df['Severidade'].astype(str).unique())
-        filtro_sev = st.multiselect("Severidade", options=opcoes_sev)
+        with cf1:
+            opcoes_analista = sorted(df['Analista N2'].astype(str).unique())
+            filtro_analista = st.multiselect("Analista N2", options=opcoes_analista)
+            
+        with cf2:
+            opcoes_jira = sorted(df['Status Jira'].astype(str).unique())
+            filtro_jira = st.multiselect("Status Jira", options=opcoes_jira)
+            
+        with cf3:
+            opcoes_plat = sorted(df['Plataforma'].astype(str).unique())
+            filtro_plat = st.multiselect("Plataforma", options=opcoes_plat)
+            
+        with cf4:
+            opcoes_sev = sorted(df['Severidade'].astype(str).unique())
+            filtro_sev = st.multiselect("Severidade", options=opcoes_sev)
+
+        btn_aplicar = st.form_submit_button("✅ Aplicar Filtros")
 
     # Cria uma cópia do dataframe apenas para exibição e exportação
     df_exibicao = df.copy()
@@ -326,7 +328,6 @@ if 'df_n2' in st.session_state:
     c_titulo, c_botao = st.columns([4, 1])
     
     with c_titulo:
-        # Mostra a quantidade de chamados filtrados no título
         st.subheader(f"📋 Lista Detalhada ({len(df_exibicao)} chamados)")
         
     with c_botao:
