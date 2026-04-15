@@ -339,28 +339,29 @@ if 'df_n2' in st.session_state:
     st.divider()
 
     # --- FILTROS DA TABELA ---
-    # Coloquei dentro de um formulário para a página não ficar pulando toda vez que eu clicar em algo
     with st.form("form_filtros_n2"):
         st.markdown("#### 🔍 Filtros da Lista Detalhada")
         
         cf1, cf2, cf3, cf4 = st.columns(4)
         
         with cf1:
-            opcoes_analista = sorted(df['Analista N2'].astype(str).unique())
+            # Adicionei o .dropna() em todos para garantir que valores nulos não quebrem o código
+            opcoes_analista = sorted(df['Analista N2'].dropna().astype(str).unique())
             filtro_analista = st.multiselect("Analista N2", options=opcoes_analista)
             
         with cf2:
-            opcoes_jira = sorted(df['Status Jira'].astype(str).unique())
+            opcoes_jira = sorted(df['Status Jira'].dropna().astype(str).unique())
             filtro_jira = st.multiselect("Status Jira", options=opcoes_jira)
             
         with cf3:
-            opcoes_plat = sorted(df['Plataforma'].astype(str).unique())
+            opcoes_plat = sorted(df['Plataforma'].dropna().astype(str).unique())
             filtro_plat = st.multiselect("Plataforma", options=opcoes_plat)
             
         with cf4:
-            opcoes_sev = sorted(df['Severidade'].astype(str).unique())
+            opcoes_sev = sorted(df['Severidade'].dropna().astype(str).unique())
             filtro_sev = st.multiselect("Severidade", options=opcoes_sev)
 
+        # O botão DEVE ficar alinhado aqui dentro do bloco "with st.form"
         btn_aplicar = st.form_submit_button("✅ Aplicar Filtros")
 
     # Faço uma cópia só para a tabela, assim não estrago os gráficos lá de cima
