@@ -95,7 +95,8 @@ def process_tickets(tickets, admin_map):
     for t in tickets:
         attrs = t.get('ticket_attributes', {})
         admin_id = t.get('admin_assignee_id')
-        # --- CORREÇÃO DE STATUS FANTASMA ---
+        
+        # CORREÇÃO DE STATUS FANTASMA
         # Se o sistema diz que está encerrado (open: false), forçamos para "Fechado"
         if t.get('open') is False:
             status_atual = 'Fechado'
@@ -121,21 +122,24 @@ def process_tickets(tickets, admin_map):
         if status_atual in status_conclusao or t.get('open') is False:
             data_finalizacao = dt_update_raw.strftime("%d/%m/%Y %H:%M")
 
-        # --- NOVA LÓGICA: Buscar o Status do Jira ---
+        # Buscar o Status do Jira
         status_jira = "-"
         parts = t.get('ticket_parts', {}).get('ticket_parts', [])
         
-        # Lemos a lista de trás para frente para pegar sempre a atualização mais recente
         for part in reversed(parts):
             if part.get('part_type') == 'comment':
                 body = part.get('body', '')
                 if "O status do chamado foi atualizado para:" in body:
-                    # Remove as tags HTML do texto
                     texto_limpo = re.sub('<[^<]+>', '', body)
-                    # Pega apenas o que está depois dos dois pontos e remove os espaços extras
                     status_jira = texto_limpo.split("O status do chamado foi atualizado para:")[1].strip()
-                    break # Para a busca ao encontrar o último status
-        
+                    break 
+
+        # Puxa a conversa vinculada, se houver
+        linked = t.get('linked_objects', {}).get('data', [])
+        conversa_id = linked[0]['id'] if linked else None
+        link_conversa = f"https://app.intercom.com/a/inbox/{WORKSPACE_ID}/inbox/conversation/{conversa_id}?view=List" if conversa_id else "Sem vínculo"
+
+        # Montagem de todas as colunas
         row = {
             "SLA": indicador_sla,
             "ID Ticket": t.get('ticket_id'),
@@ -143,10 +147,15 @@ def process_tickets(tickets, admin_map):
             "Data Criação": dt_criacao_raw.strftime("%d/%m/%Y %H:%M"),
             "Data Resolução": data_finalizacao,
             "Status Intercom": status_atual,
-            "Status Jira": status_jira, # Adicionamos a nova coluna aqui
+            "Status Jira": status_jira, 
             "Analista N2": admin_map.get(str(admin_id), "Não atribuído"),
+            "Criado por": attrs.get('Criado por', 'N/A'),
+            "Plataforma": attrs.get('Plataforma', '-'),
+            "Severidade": attrs.get('Severidade', '-'),
             "Empresa": attrs.get('Nome da Empresa', '-'),
-            "Link Ticket": f"https://app.intercom.com/a/inbox/{WORKSPACE_ID}/inbox/conversation/{t.get('id')}?view=TableFullscreen"
+            "Jira": attrs.get('Chamado no Jira', '-'),
+            "Link Ticket": f"https://app.intercom.com/a/inbox/{WORKSPACE_ID}/inbox/conversation/{t.get('id')}?view=TableFullscreen",
+            "Link Conversa Original": link_conversa
         }
         rows.append(row)
     return pd.DataFrame(rows)
