@@ -285,15 +285,53 @@ if 'df_n2' in st.session_state:
 
     st.divider()
 
+    st.divider()
+
+    # --- FILTROS ESPECÍFICOS DA TABELA ---
+    st.markdown("#### 🔍 Filtros da Lista Detalhada")
+    
+    # Criamos 4 colunas para deixar os filtros organizados lado a lado
+    cf1, cf2, cf3, cf4 = st.columns(4)
+    
+    with cf1:
+        opcoes_analista = sorted(df['Analista N2'].astype(str).unique())
+        filtro_analista = st.multiselect("Analista N2", options=opcoes_analista)
+        
+    with cf2:
+        opcoes_jira = sorted(df['Status Jira'].astype(str).unique())
+        filtro_jira = st.multiselect("Status Jira", options=opcoes_jira)
+        
+    with cf3:
+        opcoes_plat = sorted(df['Plataforma'].astype(str).unique())
+        filtro_plat = st.multiselect("Plataforma", options=opcoes_plat)
+        
+    with cf4:
+        opcoes_sev = sorted(df['Severidade'].astype(str).unique())
+        filtro_sev = st.multiselect("Severidade", options=opcoes_sev)
+
+    # Cria uma cópia do dataframe apenas para exibição e exportação
+    df_exibicao = df.copy()
+
+    # Aplica os filtros se algo for selecionado
+    if filtro_analista:
+        df_exibicao = df_exibicao[df_exibicao['Analista N2'].isin(filtro_analista)]
+    if filtro_jira:
+        df_exibicao = df_exibicao[df_exibicao['Status Jira'].isin(filtro_jira)]
+    if filtro_plat:
+        df_exibicao = df_exibicao[df_exibicao['Plataforma'].isin(filtro_plat)]
+    if filtro_sev:
+        df_exibicao = df_exibicao[df_exibicao['Severidade'].isin(filtro_sev)]
+
     # --- LISTA DETALHADA E BOTÃO DE EXPORTAR ---
     c_titulo, c_botao = st.columns([4, 1])
     
     with c_titulo:
-        st.subheader("📋 Lista Detalhada")
+        # Mostra a quantidade de chamados filtrados no título
+        st.subheader(f"📋 Lista Detalhada ({len(df_exibicao)} chamados)")
         
     with c_botao:
-        if not df.empty:
-            excel_file = converter_excel(df)
+        if not df_exibicao.empty:
+            excel_file = converter_excel(df_exibicao)
             st.download_button(
                 label="📥 Baixar Excel",
                 data=excel_file,
@@ -304,7 +342,7 @@ if 'df_n2' in st.session_state:
             )
 
     st.dataframe(
-        df, 
+        df_exibicao, 
         use_container_width=True, 
         hide_index=True,
         column_config={
