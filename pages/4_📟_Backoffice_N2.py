@@ -398,7 +398,7 @@ if 'df_n2' in st.session_state:
     df_periodo = df_exibicao[df_exibicao['Origem'] == 'Período']
 
     # Para o Backlog, filtramos para mostrar apenas os chamados que realmente estão ativos
-    status_ativos = ['Aberto', 'Em andamento', 'Em Andamento', 'Em Análise N2']
+    status_ativos = ['Aberto', 'Em andamento', 'Em Andamento', 'Esperando por vocÊ', 'Em Análise N2']
     df_backlog = df_exibicao[(df_exibicao['Origem'] == 'Backlog') & (df_exibicao['Status Intercom'].isin(status_ativos))]
 
     # Crio as abas já mostrando o número de chamados em cada uma
