@@ -185,9 +185,9 @@ if 'df_n2' in st.session_state:
     k1, k2, k3, k4 = st.columns(4)
     total = len(df)
     
-    # Ajustamos para pegar os textos exatos que vêm do Intercom
-    abertos = len(df[df['Status'].isin(['Aberto', 'Em andamento', 'Em Andamento', 'Em Análise N2'])])
-    resolvidos = len(df[df['Status'].isin(['Resolvido', 'Fechado'])])
+    # Atualizado para ler a coluna "Status Intercom"
+    abertos = len(df[df['Status Intercom'].isin(['Aberto', 'Em andamento', 'Em Andamento', 'Em Análise N2'])])
+    resolvidos = len(df[df['Status Intercom'].isin(['Resolvido', 'Fechado'])])
     
     k1.metric("Total de Tickets", total)
     k1.caption("No período selecionado")
@@ -201,7 +201,7 @@ if 'df_n2' in st.session_state:
 
     with col_graf1:
         st.subheader("Situação dos Tickets")
-        # Ajustamos o mapa de cores para os novos nomes
+        # Mapa de cores
         cores_status = {
             'Aberto': '#ef553b', 
             'Em andamento': '#636efa', 
@@ -210,7 +210,8 @@ if 'df_n2' in st.session_state:
             'Resolvido': '#00cc96',
             'Fechado': '#00cc96'
         }
-        fig_status = px.pie(df, names='Status', hole=0.4, color='Status', color_discrete_map=cores_status)
+        # Atualizado para usar "Status Intercom" no gráfico
+        fig_status = px.pie(df, names='Status Intercom', hole=0.4, color='Status Intercom', color_discrete_map=cores_status)
         st.plotly_chart(fig_status, use_container_width=True)
 
     with col_graf2:
