@@ -7,18 +7,18 @@ from datetime import datetime, timedelta
 from io import BytesIO
 import re
 
-# Importação do utils (reaproveitando sua lógica atual)
+# Puxando as funções de segurança e botão de sair que já usamos em outros lugares
 from utils import check_password, logout_button
 
-# Configurações da página
+# Configurando a carinha da página e o título que aparece na aba do navegador
 st.set_page_config(page_title="Monitoramento N2", page_icon="📟", layout="wide")
 
-# Bloqueio de acesso
+# Bloqueio de segurança para ninguém de fora acessar o painel
 usuario = check_password()
 if not usuario:
     st.stop()
 
-# Configuração Intercom
+# Configuração para acessar o Intercom
 WORKSPACE_ID = "xwvpdtlu"
 try:
     INTERCOM_ACCESS_TOKEN = st.secrets["INTERCOM_TOKEN"]
@@ -35,10 +35,11 @@ HEADERS = {
     "Intercom-Version": "2.10"
 }
 
-# Funções de busca
+# Funções que buscam os dados lá no Intercom
 
 @st.cache_data(ttl=3600)
 def get_all_admins():
+    # Pego a lista de todos os analistas para poder trocar o ID pelo nome deles depois
     url = "https://api.intercom.io/admins"
     try:
         r = requests.get(url, headers=HEADERS)
@@ -49,10 +50,11 @@ def get_all_admins():
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_n2_tickets(start_date, end_date):
     url = "https://api.intercom.io/tickets/search"
+    # Transformo as datas que escolhi na tela no formato que o Intercom entende
     ts_start = int(datetime.combine(start_date, datetime.min.time()).timestamp())
     ts_end = int(datetime.combine(end_date, datetime.max.time()).timestamp())
     
-    # Função auxiliar para fazer a busca e paginar sem repetir código
+    # Criei essa função menor para fazer a busca e ler todas as páginas de resultados sem repetir código
     def executar_busca(payload):
         resultados = []
         has_more = True
@@ -63,6 +65,7 @@ def fetch_n2_tickets(start_date, end_date):
                 batch = data.get('tickets', [])
                 resultados.extend(batch)
                 
+                # Se tiver mais páginas, pego a indicação da próxima e continuo buscando
                 if data.get('pages', {}).get('next'):
                     payload['pagination']['starting_after'] = data['pages']['next']['starting_after']
                 else:
@@ -72,20 +75,20 @@ def fetch_n2_tickets(start_date, end_date):
                 break
         return resultados
 
-    # 1. BUSCA POR PERÍODO (Tickets criados na data selecionada)
+    # 1. Primeiro eu peço apenas os tickets criados na data que selecionei na tela
     payload_periodo = {
         "query": {
             "operator": "AND",
             "value": [
                 {"field": "created_at", "operator": ">", "value": ts_start},
                 {"field": "created_at", "operator": "<", "value": ts_end},
-                {"field": "ticket_type_id", "operator": "=", "value": "14"}
+                {"field": "ticket_type_id", "operator": "=", "value": "14"} # ID 14 é a fila de Tecnologia N2
             ]
         },
         "pagination": {"per_page": 50}
     }
     
-    # 2. BUSCA POR BACKLOG (Tickets ainda abertos, criados em qualquer data)
+    # 2. Depois eu peço os tickets antigos que ainda estão abertos, para montar nosso backlog
     payload_abertos = {
         "query": {
             "operator": "AND",
@@ -107,13 +110,23 @@ def fetch_n2_tickets(start_date, end_date):
     
     status_text.empty()
     
-    # Junta as duas listas e remove os duplicados usando o ID do ticket
-    todos_tickets = tickets_periodo + tickets_abertos
+    # Faço uma marcação invisível para eu saber em qual aba o ticket vai aparecer depois
+    for t in tickets_abertos:
+        t['_origem_fila'] = 'Backlog'
+        
+    for t in tickets_periodo:
+        t['_origem_fila'] = 'Período'
+    
+    # Junto tudo colocando o backlog primeiro. Assim, se um ticket estiver nas duas listas,
+    # a marcação de 'Período' vai sobrescrever a de 'Backlog' da forma certa.
+    todos_tickets = tickets_abertos + tickets_periodo
+    # Removo os repetidos usando o ID do ticket para não contar o mesmo chamado duas vezes
     tickets_unicos = {t['id']: t for t in todos_tickets}
     
     return list(tickets_unicos.values())
 
 def process_tickets(tickets, admin_map):
+    # Aqui eu limpo e organizo os dados brutos que vieram da API
     rows = []
     hoje = datetime.now()
     
@@ -122,17 +135,18 @@ def process_tickets(tickets, admin_map):
         admin_id = t.get('admin_assignee_id')
         
         # CORREÇÃO DE STATUS FANTASMA
-        # Se o sistema diz que está encerrado (open: false), forçamos para "Fechado"
+        # Às vezes a automação fecha o ticket mas a etiqueta trava em 'Em andamento'
+        # Então se o sistema diz que a janela está encerrada, eu forço o status para "Fechado"
         if t.get('open') is False:
             status_atual = 'Fechado'
         else:
             status_atual = t.get('ticket_state_internal_label', t.get('ticket_state'))
         
-        # Datas ajustadas para o fuso (-3h)
+        # Ajusto o fuso horário subtraindo 3 horas para bater com o horário do Brasil
         dt_criacao_raw = datetime.fromtimestamp(t['created_at']) - timedelta(hours=3)
         dt_update_raw = datetime.fromtimestamp(t['updated_at']) - timedelta(hours=3)
         
-        # Lógica da Bolinha de SLA
+        # Regra do SLA: se o ticket está aberto há 5 dias ou mais, ganha bolinha vermelha
         dias_aberto = (hoje - dt_criacao_raw).days
         indicador_sla = ""
         status_abertos = ['Aberto', 'Em andamento', 'Em Andamento', 'Em Análise N2']
@@ -140,14 +154,15 @@ def process_tickets(tickets, admin_map):
         if status_atual in status_abertos:
             indicador_sla = "🔴" if dias_aberto >= 5 else "🟢"
         
-        # Data de Finalização
+        # Garanto que pego a data certa quando o ticket recebe um status de finalizado
         data_finalizacao = "-"
         status_conclusao = ['Resolvido', 'Fechado', 'Concluído', 'Concluído N2']
         
         if status_atual in status_conclusao or t.get('open') is False:
             data_finalizacao = dt_update_raw.strftime("%d/%m/%Y %H:%M")
 
-        # Buscar o Status do Jira
+        # Em vez de ter que abrir o chamado, leio os comentários de trás para frente
+        # e pego a última atualização que o N2 fez no Jira
         status_jira = "-"
         parts = t.get('ticket_parts', {}).get('ticket_parts', [])
         
@@ -159,15 +174,16 @@ def process_tickets(tickets, admin_map):
                     status_jira = texto_limpo.split("O status do chamado foi atualizado para:")[1].strip()
                     break 
 
-        # Puxa a conversa vinculada, se houver
+        # Se o ticket veio de um chat, eu puxo o link da conversa original
         linked = t.get('linked_objects', {}).get('data', [])
         conversa_id = linked[0]['id'] if linked else None
         link_conversa = f"https://app.intercom.com/a/inbox/{WORKSPACE_ID}/inbox/conversation/{conversa_id}?view=List" if conversa_id else "Sem vínculo"
 
-        # Montagem de todas as colunas
+        # Monto a linha da tabela com todas as colunas mastigadinhas
         row = {
             "SLA": indicador_sla,
             "ID Ticket": t.get('ticket_id'),
+            "Origem": t.get('_origem_fila', 'Período'),
             "Assunto": attrs.get('_default_title_', 'Sem Assunto'),
             "Data Criação": dt_criacao_raw.strftime("%d/%m/%Y %H:%M"),
             "Data Resolução": data_finalizacao,
@@ -186,15 +202,17 @@ def process_tickets(tickets, admin_map):
     return pd.DataFrame(rows)
     
 def converter_excel(df):
+    # Função rápida para transformar a nossa tabela em um arquivo Excel bonitinho
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Tickets N2')
         
-        # Ajustando o tamanho da primeira coluna para ficar mais bonito
+        # Alargo as colunas para o texto não ficar cortado quando a pessoa baixar
         worksheet = writer.sheets['Tickets N2']
         worksheet.set_column('A:O', 20) 
     return output.getvalue()
-# Interface Principal
+
+# A partir daqui é a interface que aparece na tela do painel
 
 st.title("📟 Painel Back-office: Tecnologia N2")
 
@@ -205,6 +223,7 @@ with st.sidebar:
     btn_run = st.button("🚀 Atualizar Dados", type="primary")
     logout_button()
 
+# Quando eu clico em atualizar, o painel roda as funções que criei lá em cima
 if btn_run:
     start, end = periodo
     with st.spinner("Buscando tickets no Intercom..."):
@@ -214,14 +233,14 @@ if btn_run:
         if raw_data:
             df = process_tickets(raw_data, admins)
             
-            # --- NOVA LÓGICA DE ORDENAÇÃO FIXA ---
-            # Vermelho vale 0, Verde vale 1 e o restante vale 2
+            # Criei essa regra para organizar a fila: vermelhos no topo, verdes no meio, resolvidos embaixo
             prioridade = {'🔴': 0, '🟢': 1, '': 2}
             df['ordem_prioridade'] = df['SLA'].map(prioridade)
             
-            # Ordenação pela prioridade e depois pela Data de Criação (mais antigos primeiro)
+            # Ordeno pela cor e depois deixo os mais antigos sempre em cima para darmos prioridade
             df = df.sort_values(by=['ordem_prioridade', 'Data Criação'], ascending=[True, True])
             
+            # Apago a coluna de prioridade para ela não aparecer na tela
             df = df.drop(columns=['ordem_prioridade'])
             
             st.session_state['df_n2'] = df
@@ -231,11 +250,11 @@ if btn_run:
 if 'df_n2' in st.session_state:
     df_completo = st.session_state['df_n2']
     
-    # --- NOVO FILTRO GLOBAL ---
+    # --- FILTRO GLOBAL DE EQUIPE ---
     with st.sidebar:
         st.markdown("### ⚙️ Filtros Globais")
         
-        # Lista fixa do time de atendimento
+        # Deixo nossa equipe já pré-configurada para não precisar digitar toda vez
         time_atendimento = [
             'rhayslla.junca@produttivo.com.br',
             'douglas.david@produttivo.com.br',
@@ -247,28 +266,27 @@ if 'df_n2' in st.session_state:
             'bruno.braga@produttivo.com.br'
         ]
         
+        # Limpo os valores vazios para não dar erro na hora de colocar em ordem alfabética
         criadores_unicos = sorted(df_completo['Criado por'].dropna().astype(str).unique())
         
-        # Garante que o painel só marque como padrão os e-mails que realmente estão na busca atual
+        # Garanto que só vai marcar como padrão os e-mails que realmente estão na busca atual
         padrao_selecionado = [email for email in time_atendimento if email in criadores_unicos]
         
-        # Cria o filtro já com o time preenchido
         sel_criadores = st.multiselect(
             "👤 Aberto por (Time de Atendimento):", 
             options=criadores_unicos,
             default=padrao_selecionado
         )
 
-    # Aplica o filtro no dataframe que será usado no resto do painel
+    # Aplico o filtro de e-mail na nossa base
     df = df_completo.copy()
     if sel_criadores:
         df = df[df['Criado por'].isin(sel_criadores)]
     
-    # KPIs Rápidos
+    # Crio as caixinhas com os números rápidos para bater o olho e ver como estamos
     k1, k2, k3, k4 = st.columns(4)
     total = len(df)
     
-    # Atualizado para ler a coluna "Status Intercom" e incluir novos status de resolução
     abertos = len(df[df['Status Intercom'].isin(['Aberto', 'Em andamento', 'Em Andamento', 'Em Análise N2'])])
     resolvidos = len(df[df['Status Intercom'].isin(['Resolvido', 'Fechado', 'Concluído', 'Concluído N2'])])
     
@@ -284,7 +302,7 @@ if 'df_n2' in st.session_state:
 
     with col_graf1:
         st.subheader("Situação dos Tickets")
-        # Mapa de cores
+        # Defino cores fixas para os gráficos não mudarem de cor sozinhos
         cores_status = {
             'Aberto': '#ef553b', 
             'Em andamento': '#636efa', 
@@ -310,9 +328,8 @@ if 'df_n2' in st.session_state:
 
     st.divider()
 
-    st.divider()
-
-    # --- FILTROS ESPECÍFICOS DA TABELA ---
+    # --- FILTROS DA TABELA ---
+    # Coloquei dentro de um formulário para a página não ficar pulando toda vez que eu clicar em algo
     with st.form("form_filtros_n2"):
         st.markdown("#### 🔍 Filtros da Lista Detalhada")
         
@@ -336,10 +353,9 @@ if 'df_n2' in st.session_state:
 
         btn_aplicar = st.form_submit_button("✅ Aplicar Filtros")
 
-    # Cria uma cópia do dataframe apenas para exibição e exportação
+    # Faço uma cópia só para a tabela, assim não estrago os gráficos lá de cima
     df_exibicao = df.copy()
 
-    # Aplica os filtros se algo for selecionado
     if filtro_analista:
         df_exibicao = df_exibicao[df_exibicao['Analista N2'].isin(filtro_analista)]
     if filtro_jira:
@@ -349,11 +365,12 @@ if 'df_n2' in st.session_state:
     if filtro_sev:
         df_exibicao = df_exibicao[df_exibicao['Severidade'].isin(filtro_sev)]
 
-    # --- LISTA DETALHADA E BOTÃO DE EXPORTAR ---
+    # --- ABAS E BOTÃO DE EXCEL ---
+    # Divido o espaço para alinhar o botão do Excel bonitinho à direita
     c_titulo, c_botao = st.columns([4, 1])
     
     with c_titulo:
-        st.subheader(f"📋 Lista Detalhada ({len(df_exibicao)} chamados)")
+        st.subheader("📋 Lista Detalhada")
         
     with c_botao:
         if not df_exibicao.empty:
@@ -367,17 +384,29 @@ if 'df_n2' in st.session_state:
                 type="primary"
             )
 
-    st.dataframe(
-        df_exibicao, 
-        use_container_width=True, 
-        hide_index=True,
-        column_config={
-            "SLA": st.column_config.Column(width="small"),
-            "Link Ticket": st.column_config.LinkColumn(
-                "Link Ticket", display_text="🔗 Abrir Ticket"
-            ),
-            "Link Conversa Original": st.column_config.LinkColumn(
-                "Link Conversa Original", display_text="💬 Abrir Conversa"
-            )
-        }
-    )
+    # Separo os chamados nas duas abas usando aquela marcação que fiz lá em cima
+    df_periodo = df_exibicao[df_exibicao['Origem'] == 'Período']
+    df_backlog = df_exibicao[df_exibicao['Origem'] == 'Backlog']
+
+    # Crio as abas já mostrando o número de chamados em cada uma
+    aba_periodo, aba_backlog = st.tabs([
+        f"📅 Período Selecionado ({len(df_periodo)})", 
+        f"🗄️ Backlog Pendente ({len(df_backlog)})"
+    ])
+
+    # Transformo as URLs em links clicáveis e escondo a coluna Origem
+    config_colunas = {
+        "SLA": st.column_config.Column(width="small"),
+        "Origem": None, 
+        "Link Ticket": st.column_config.LinkColumn("Link Ticket", display_text="🔗 Abrir Ticket"),
+        "Link Conversa Original": st.column_config.LinkColumn("Link Conversa Original", display_text="💬 Abrir Conversa")
+    }
+
+    with aba_periodo:
+        st.dataframe(df_periodo, use_container_width=True, hide_index=True, column_config=config_colunas)
+
+    with aba_backlog:
+        if not df_backlog.empty:
+            st.dataframe(df_backlog, use_container_width=True, hide_index=True, column_config=config_colunas)
+        else:
+            st.success("🎉 Nenhum chamado antigo pendente no Backlog!")
