@@ -89,30 +89,45 @@ def fetch_n2_tickets(start_date, end_date):
 
 def process_tickets(tickets, admin_map):
     rows = []
+    hoje = datetime.now()
+    
     for t in tickets:
         attrs = t.get('ticket_attributes', {})
         admin_id = t.get('admin_assignee_id')
+        status_atual = t.get('ticket_state_internal_label', t.get('ticket_state'))
         
-        # Puxa a conversa vinculada, se houver
+        # Datas originais do Intercom
+        dt_criacao_raw = datetime.fromtimestamp(t['created_at']) - timedelta(hours=3)
+        dt_update_raw = datetime.fromtimestamp(t['updated_at']) - timedelta(hours=3)
+        
+        # Lógica da Bolinha de SLA (Apenas para casos abertos)
+        dias_aberto = (hoje - dt_criacao_raw).days
+        indicador_sla = ""
+        
+        status_abertos = ['Aberto', 'Em andamento', 'Em Andamento', 'Em Análise N2']
+        if status_atual in status_abertos:
+            indicador_sla = "🟢" if dias_aberto < 5 else "🔴"
+        
+        # Data de Finalização (usamos a última atualização se o status for resolvido/fechado)
+        data_finalizacao = "-"
+        if status_atual in ['Resolvido', 'Fechado']:
+            data_finalizacao = dt_update_raw.strftime("%d/%m/%Y %H:%M")
+
+        # Puxa a conversa vinculada
         linked = t.get('linked_objects', {}).get('data', [])
         conversa_id = linked[0]['id'] if linked else None
-        
-        # Links ajustados conforme o padrão do Intercom
         link_conversa = f"https://app.intercom.com/a/inbox/{WORKSPACE_ID}/inbox/conversation/{conversa_id}?view=List" if conversa_id else "Sem vínculo"
-        link_ticket = f"https://app.intercom.com/a/inbox/{WORKSPACE_ID}/inbox/conversation/{t.get('id')}?view=TableFullscreen"
 
         row = {
+            "SLA": indicador_sla,
             "ID Ticket": t.get('ticket_id'),
             "Assunto": attrs.get('_default_title_', 'Sem Assunto'),
-            "Data Criação": (datetime.fromtimestamp(t['created_at']) - timedelta(hours=3)).strftime("%d/%m/%Y %H:%M"),
-            "Status": t.get('ticket_state_internal_label', t.get('ticket_state')),
+            "Data Criação": dt_criacao_raw.strftime("%d/%m/%Y %H:%M"),
+            "Data Resolução": data_finalizacao,
+            "Status": status_atual,
             "Analista N2": admin_map.get(str(admin_id), "Não atribuído"),
-            "Criado por": attrs.get('Criado por', 'N/A'),
-            "Plataforma": attrs.get('Plataforma', '-'),
-            "Severidade": attrs.get('Severidade', '-'),
             "Empresa": attrs.get('Nome da Empresa', '-'),
-            "Jira": attrs.get('Chamado no Jira', '-'),
-            "Link Ticket": link_ticket,
+            "Link Ticket": f"https://app.intercom.com/a/inbox/{WORKSPACE_ID}/inbox/conversation/{t.get('id')}?view=TableFullscreen",
             "Link Conversa Original": link_conversa
         }
         rows.append(row)
@@ -188,13 +203,12 @@ if 'df_n2' in st.session_state:
         use_container_width=True, 
         hide_index=True,
         column_config={
+            "SLA": st.column_config.Column(width="small"),
             "Link Ticket": st.column_config.LinkColumn(
-                "Link Ticket", 
-                display_text="🔗 Abrir Ticket"
+                "Link Ticket", display_text="🔗 Abrir Ticket"
             ),
             "Link Conversa Original": st.column_config.LinkColumn(
-                "Link Conversa Original", 
-                display_text="💬 Abrir Conversa"
+                "Link Conversa Original", display_text="💬 Abrir Conversa"
             )
         }
     )
