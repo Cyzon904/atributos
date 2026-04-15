@@ -283,18 +283,28 @@ if 'df_n2' in st.session_state:
     if sel_criadores:
         df = df[df['Criado por'].isin(sel_criadores)]
     
-    # Crio as caixinhas com os números rápidos para bater o olho e ver como estamos
-    k1, k2, k3, k4 = st.columns(4)
+    # Crio 5 colunas agora para acomodar o novo indicador
+    k1, k2, k3, k4, k5 = st.columns(5)
     total = len(df)
     
-    abertos = len(df[df['Status Intercom'].isin(['Aberto', 'Em andamento', 'Em Andamento', 'Em Análise N2'])])
+    # Faço uma lista com os status que consideramos como abertos
+    status_abertos = ['Aberto', 'Em andamento', 'Em Andamento', 'Em Análise N2']
+    
+    # Conto os abertos separando pela coluna Origem
+    abertos_periodo = len(df[(df['Status Intercom'].isin(status_abertos)) & (df['Origem'] == 'Período')])
+    abertos_backlog = len(df[(df['Status Intercom'].isin(status_abertos)) & (df['Origem'] == 'Backlog')])
+    
     resolvidos = len(df[df['Status Intercom'].isin(['Resolvido', 'Fechado', 'Concluído', 'Concluído N2'])])
     
     k1.metric("Total de Tickets", total)
     k1.caption("Após filtros")
-    k2.metric("Ativos (Aberto/Work)", abertos)
-    k3.metric("Resolvidos", resolvidos) 
-    k4.metric("Taxa de Conclusão", f"{(resolvidos/total*100):.1f}%" if total > 0 else "0%")
+    
+    # Separo os ativos em duas métricas diferentes
+    k2.metric("Ativos (Período)", abertos_periodo)
+    k3.metric("Ativos (Backlog)", abertos_backlog)
+    
+    k4.metric("Resolvidos", resolvidos) 
+    k5.metric("Taxa de Conclusão", f"{(resolvidos/total*100):.1f}%" if total > 0 else "0%")
 
     st.divider()
 
