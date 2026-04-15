@@ -149,7 +149,7 @@ def process_tickets(tickets, admin_map):
         # Regra do SLA: se o ticket está aberto há 5 dias ou mais, ganha bolinha vermelha
         dias_aberto = (hoje - dt_criacao_raw).days
         indicador_sla = ""
-        status_abertos = ['Aberto', 'Em andamento', 'Em Andamento', 'Em Análise N2']
+        status_abertos = ['Aberto', 'Em andamento', 'Em Andamento', 'Em Análise N2', 'Esperando por você']
         
         if status_atual in status_abertos:
             indicador_sla = "🔴" if dias_aberto >= 5 else "🟢"
@@ -284,7 +284,8 @@ if 'df_n2' in st.session_state:
         df = df[df['Criado por'].isin(sel_criadores)]
         
     # Limpeza da base para garantir que o backlog só tenha tickets realmente ativos
-    status_ativos = ['Aberto', 'Em andamento', 'Em Andamento', 'Em Análise N2']
+    # Adicionamos o 'Esperando por você' aqui também
+    status_ativos = ['Aberto', 'Em andamento', 'Em Andamento', 'Em Análise N2', 'Esperando por você']
     df = df[(df['Origem'] == 'Período') | ((df['Origem'] == 'Backlog') & (df['Status Intercom'].isin(status_ativos)))]
     
     # Crio as caixinhas com os números rápidos para bater o olho e ver como estamos
