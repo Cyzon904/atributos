@@ -222,7 +222,7 @@ if 'df_n2' in st.session_state:
             'bruno.braga@produttivo.com.br'
         ]
         
-        criadores_unicos = sorted(df_completo['Criado por'].astype(str).unique())
+        criadores_unicos = sorted(df_completo['Criado por'].dropna().astype(str).unique())
         
         # Garante que o painel só marque como padrão os e-mails que realmente estão na busca atual
         padrao_selecionado = [email for email in time_atendimento if email in criadores_unicos]
