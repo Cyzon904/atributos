@@ -159,7 +159,16 @@ def process_tickets(tickets, admin_map):
         }
         rows.append(row)
     return pd.DataFrame(rows)
-
+    
+def converter_excel(df):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Tickets N2')
+        
+        # Ajustando o tamanho da primeira coluna para ficar mais bonito
+        worksheet = writer.sheets['Tickets N2']
+        worksheet.set_column('A:O', 20) 
+    return output.getvalue()
 # Interface Principal
 
 st.title("📟 Painel Back-office: Tecnologia N2")
@@ -274,7 +283,26 @@ if 'df_n2' in st.session_state:
             fig_adm = px.bar(df_adm, x='count', y='Analista N2', orientation='h', text='count')
             st.plotly_chart(fig_adm, use_container_width=True)
 
-    st.subheader("📋 Lista Detalhada")
+    st.divider()
+
+    # --- LISTA DETALHADA E BOTÃO DE EXPORTAR ---
+    c_titulo, c_botao = st.columns([4, 1])
+    
+    with c_titulo:
+        st.subheader("📋 Lista Detalhada")
+        
+    with c_botao:
+        if not df.empty:
+            excel_file = converter_excel(df)
+            st.download_button(
+                label="📥 Baixar Excel",
+                data=excel_file,
+                file_name=f"Relatorio_Backoffice_N2_{datetime.now().strftime('%d_%m_%Y')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+                type="primary"
+            )
+
     st.dataframe(
         df, 
         use_container_width=True, 
