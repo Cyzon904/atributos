@@ -177,6 +177,13 @@ if 'df_n2' in st.session_state:
         use_container_width=True, 
         hide_index=True,
         column_config={
-            "Link": st.column_config.LinkColumn("Link", display_text="🔗 Abrir Ticket")
+            "Link Ticket": st.column_config.LinkColumn(
+                "Link Ticket", 
+                display_text="🔗 Abrir Ticket"
+            ),
+            "Link Conversa Original": st.column_config.LinkColumn(
+                "Link Conversa Original", 
+                display_text="💬 Abrir Conversa"
+            )
         }
     )
