@@ -179,7 +179,11 @@ def process_tickets(tickets, admin_map):
         conversa_id = linked[0]['id'] if linked else None
         link_conversa = f"https://app.intercom.com/a/inbox/{WORKSPACE_ID}/inbox/conversation/{conversa_id}?view=List" if conversa_id else "Sem vínculo"
 
-        # Monto a linha da tabela com todas as colunas mastigadinhas
+        # Pegamos o e-mail, removemos espaços nas pontas e deixamos minúsculo
+        criador_bruto = attrs.get('Criado por', 'N/A')
+        criador_limpo = str(criador_bruto).strip().lower() if criador_bruto and criador_bruto != 'N/A' else 'N/A'
+
+        # Montagem de todas as colunas
         row = {
             "SLA": indicador_sla,
             "ID Ticket": t.get('ticket_id'),
@@ -190,7 +194,7 @@ def process_tickets(tickets, admin_map):
             "Status Intercom": status_atual,
             "Status Jira": status_jira, 
             "Analista N2": admin_map.get(str(admin_id), "Não atribuído"),
-            "Criado por": attrs.get('Criado por', 'N/A'),
+            "Criado por": criador_limpo, # Aplicamos a nova variável aqui
             "Plataforma": attrs.get('Plataforma', '-'),
             "Severidade": attrs.get('Severidade', '-'),
             "Empresa": attrs.get('Nome da Empresa', '-'),
