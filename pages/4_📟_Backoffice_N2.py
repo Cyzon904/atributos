@@ -147,14 +147,16 @@ if 'df_n2' in st.session_state:
     # KPIs Rápidos
     k1, k2, k3, k4 = st.columns(4)
     total = len(df)
-    abertos = len(df[df['Status'].isin(['Aberto', 'Em Andamento'])])
-    finalizados = len(df[df['Status'] == 'Finalizado'])
+    
+    # Ajustamos para pegar os textos exatos que vêm do Intercom
+    abertos = len(df[df['Status'].isin(['Aberto', 'Em andamento', 'Em Andamento', 'Em Análise N2'])])
+    resolvidos = len(df[df['Status'].isin(['Resolvido', 'Fechado'])])
     
     k1.metric("Total de Tickets", total)
     k1.caption("No período selecionado")
     k2.metric("Ativos (Aberto/Work)", abertos)
-    k3.metric("Finalizados", finalizados)
-    k4.metric("Taxa de Conclusão", f"{(finalizados/total*100):.1f}%" if total > 0 else "0%")
+    k3.metric("Resolvidos", resolvidos) 
+    k4.metric("Taxa de Conclusão", f"{(resolvidos/total*100):.1f}%" if total > 0 else "0%")
 
     st.divider()
 
@@ -162,14 +164,23 @@ if 'df_n2' in st.session_state:
 
     with col_graf1:
         st.subheader("Situação dos Tickets")
-        fig_status = px.pie(df, names='Status', hole=0.4, color='Status',
-                            color_discrete_map={'Aberto': '#ef553b', 'Em Andamento': '#636efa', 'Finalizado': '#00cc96'})
+        # Ajustamos o mapa de cores para os novos nomes
+        cores_status = {
+            'Aberto': '#ef553b', 
+            'Em andamento': '#636efa', 
+            'Em Andamento': '#636efa',
+            'Em Análise N2': '#feca57',
+            'Resolvido': '#00cc96',
+            'Fechado': '#00cc96'
+        }
+        fig_status = px.pie(df, names='Status', hole=0.4, color='Status', color_discrete_map=cores_status)
         st.plotly_chart(fig_status, use_container_width=True)
 
     with col_graf2:
         st.subheader("Carga por Analista")
         df_adm = df['Analista N2'].value_counts().reset_index()
         fig_adm = px.bar(df_adm, x='count', y='Analista N2', orientation='h', text='count')
+        st.plotly_chart(fig_adm, use_container_width=True)
 
     st.subheader("📋 Lista Detalhada")
     st.dataframe(
