@@ -52,8 +52,28 @@ def fetch_n2_tickets(start_date, end_date):
     ts_start = int(datetime.combine(start_date, datetime.min.time()).timestamp())
     ts_end = int(datetime.combine(end_date, datetime.max.time()).timestamp())
     
-    # Filtro fixo para o ID 14 (Tecnologia - N2)
-    payload = {
+    # Função auxiliar para fazer a busca e paginar sem repetir código
+    def executar_busca(payload):
+        resultados = []
+        has_more = True
+        while has_more:
+            try:
+                resp = requests.post(url, headers=HEADERS, json=payload)
+                data = resp.json()
+                batch = data.get('tickets', [])
+                resultados.extend(batch)
+                
+                if data.get('pages', {}).get('next'):
+                    payload['pagination']['starting_after'] = data['pages']['next']['starting_after']
+                else:
+                    has_more = False
+            except Exception as e:
+                st.error(f"Erro na API: {e}")
+                break
+        return resultados
+
+    # 1. BUSCA POR PERÍODO (Tickets criados na data selecionada)
+    payload_periodo = {
         "query": {
             "operator": "AND",
             "value": [
@@ -65,28 +85,33 @@ def fetch_n2_tickets(start_date, end_date):
         "pagination": {"per_page": 50}
     }
     
-    tickets = []
-    has_more = True
+    # 2. BUSCA POR BACKLOG (Tickets ainda abertos, criados em qualquer data)
+    payload_abertos = {
+        "query": {
+            "operator": "AND",
+            "value": [
+                {"field": "open", "operator": "=", "value": True},
+                {"field": "ticket_type_id", "operator": "=", "value": "14"}
+            ]
+        },
+        "pagination": {"per_page": 50}
+    }
+    
     status_text = st.empty()
     
-    while has_more:
-        try:
-            resp = requests.post(url, headers=HEADERS, json=payload)
-            data = resp.json()
-            batch = data.get('tickets', [])
-            tickets.extend(batch)
-            status_text.caption(f"📥 Baixando tickets... {len(tickets)} encontrados.")
-            
-            if data.get('pages', {}).get('next'):
-                payload['pagination']['starting_after'] = data['pages']['next']['starting_after']
-            else:
-                has_more = False
-        except Exception as e:
-            st.error(f"Erro na API: {e}")
-            break
-            
+    status_text.caption("📥 Baixando tickets do período selecionado...")
+    tickets_periodo = executar_busca(payload_periodo)
+    
+    status_text.caption("📥 Resgatando backlog antigo em aberto...")
+    tickets_abertos = executar_busca(payload_abertos)
+    
     status_text.empty()
-    return tickets
+    
+    # Junta as duas listas e remove os duplicados usando o ID do ticket
+    todos_tickets = tickets_periodo + tickets_abertos
+    tickets_unicos = {t['id']: t for t in todos_tickets}
+    
+    return list(tickets_unicos.values())
 
 def process_tickets(tickets, admin_map):
     rows = []
