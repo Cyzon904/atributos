@@ -5,6 +5,7 @@ import time
 import plotly.express as px
 from datetime import datetime, timedelta
 from io import BytesIO
+import re
 
 # Importação do utils (reaproveitando sua lógica atual)
 from utils import check_password, logout_button
@@ -96,39 +97,49 @@ def process_tickets(tickets, admin_map):
         admin_id = t.get('admin_assignee_id')
         status_atual = t.get('ticket_state_internal_label', t.get('ticket_state'))
         
-        # Datas originais do Intercom
+        # Datas ajustadas para o fuso (-3h)
         dt_criacao_raw = datetime.fromtimestamp(t['created_at']) - timedelta(hours=3)
         dt_update_raw = datetime.fromtimestamp(t['updated_at']) - timedelta(hours=3)
         
-        # Lógica da Bolinha de SLA (Apenas para casos abertos)
+        # Lógica da Bolinha de SLA
         dias_aberto = (hoje - dt_criacao_raw).days
         indicador_sla = ""
-        
         status_abertos = ['Aberto', 'Em andamento', 'Em Andamento', 'Em Análise N2']
-        if status_atual in status_abertos:
-            indicador_sla = "🟢" if dias_aberto < 5 else "🔴"
         
-        # Data de Finalização (usamos a última atualização se o status for resolvido/fechado)
+        if status_atual in status_abertos:
+            indicador_sla = "🔴" if dias_aberto >= 5 else "🟢"
+        
+        # Data de Finalização
         data_finalizacao = "-"
         if status_atual in ['Resolvido', 'Fechado']:
             data_finalizacao = dt_update_raw.strftime("%d/%m/%Y %H:%M")
 
-        # Puxa a conversa vinculada
-        linked = t.get('linked_objects', {}).get('data', [])
-        conversa_id = linked[0]['id'] if linked else None
-        link_conversa = f"https://app.intercom.com/a/inbox/{WORKSPACE_ID}/inbox/conversation/{conversa_id}?view=List" if conversa_id else "Sem vínculo"
-
+        # --- NOVA LÓGICA: Buscar o Status do Jira ---
+        status_jira = "-"
+        parts = t.get('ticket_parts', {}).get('ticket_parts', [])
+        
+        # Lemos a lista de trás para frente para pegar sempre a atualização mais recente
+        for part in reversed(parts):
+            if part.get('part_type') == 'comment':
+                body = part.get('body', '')
+                if "O status do chamado foi atualizado para:" in body:
+                    # Remove as tags HTML do texto
+                    texto_limpo = re.sub('<[^<]+>', '', body)
+                    # Pega apenas o que está depois dos dois pontos e remove os espaços extras
+                    status_jira = texto_limpo.split("O status do chamado foi atualizado para:")[1].strip()
+                    break # Para a busca ao encontrar o último status
+        
         row = {
             "SLA": indicador_sla,
             "ID Ticket": t.get('ticket_id'),
             "Assunto": attrs.get('_default_title_', 'Sem Assunto'),
             "Data Criação": dt_criacao_raw.strftime("%d/%m/%Y %H:%M"),
             "Data Resolução": data_finalizacao,
-            "Status": status_atual,
+            "Status Intercom": status_atual,
+            "Status Jira": status_jira, # Adicionamos a nova coluna aqui
             "Analista N2": admin_map.get(str(admin_id), "Não atribuído"),
             "Empresa": attrs.get('Nome da Empresa', '-'),
-            "Link Ticket": f"https://app.intercom.com/a/inbox/{WORKSPACE_ID}/inbox/conversation/{t.get('id')}?view=TableFullscreen",
-            "Link Conversa Original": link_conversa
+            "Link Ticket": f"https://app.intercom.com/a/inbox/{WORKSPACE_ID}/inbox/conversation/{t.get('id')}?view=TableFullscreen"
         }
         rows.append(row)
     return pd.DataFrame(rows)
