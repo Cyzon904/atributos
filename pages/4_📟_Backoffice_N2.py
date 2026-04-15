@@ -165,9 +165,8 @@ if 'df_n2' in st.session_state:
 
     with col_graf2:
         st.subheader("Carga por Analista")
-        df_adm = df['Analista'].value_counts().reset_index()
-        fig_adm = px.bar(df_adm, x='count', y='Analista', orientation='h', text='count')
-        st.plotly_chart(fig_adm, use_container_width=True)
+        df_adm = df['Analista N2'].value_counts().reset_index()
+        fig_adm = px.bar(df_adm, x='count', y='Analista N2', orientation='h', text='count')
 
     st.subheader("📋 Lista Detalhada")
     st.dataframe(
