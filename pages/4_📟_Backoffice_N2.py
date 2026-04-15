@@ -96,20 +96,23 @@ def process_tickets(tickets, admin_map):
         # Puxa a conversa vinculada, se houver
         linked = t.get('linked_objects', {}).get('data', [])
         conversa_id = linked[0]['id'] if linked else None
-        link_conversa = f"https://app.intercom.com/a/inbox/{WORKSPACE_ID}/inbox/conversation/{conversa_id}" if conversa_id else "Sem vínculo"
+        
+        # Links ajustados conforme o padrão do Intercom
+        link_conversa = f"https://app.intercom.com/a/inbox/{WORKSPACE_ID}/inbox/conversation/{conversa_id}?view=List" if conversa_id else "Sem vínculo"
+        link_ticket = f"https://app.intercom.com/a/inbox/{WORKSPACE_ID}/inbox/conversation/{t.get('id')}?view=TableFullscreen"
 
         row = {
-            "ID Ticket": t.get('ticket_id'), # Usa o ID curto (92657184)
+            "ID Ticket": t.get('ticket_id'),
             "Assunto": attrs.get('_default_title_', 'Sem Assunto'),
             "Data Criação": (datetime.fromtimestamp(t['created_at']) - timedelta(hours=3)).strftime("%d/%m/%Y %H:%M"),
-            "Status": t.get('ticket_state_internal_label', t.get('ticket_state')), # Usa o label traduzido
+            "Status": t.get('ticket_state_internal_label', t.get('ticket_state')),
             "Analista N2": admin_map.get(str(admin_id), "Não atribuído"),
             "Criado por": attrs.get('Criado por', 'N/A'),
             "Plataforma": attrs.get('Plataforma', '-'),
             "Severidade": attrs.get('Severidade', '-'),
             "Empresa": attrs.get('Nome da Empresa', '-'),
             "Jira": attrs.get('Chamado no Jira', '-'),
-            "Link Ticket": f"https://app.intercom.com/a/inbox/{WORKSPACE_ID}/tickets/{t.get('id')}",
+            "Link Ticket": link_ticket,
             "Link Conversa Original": link_conversa
         }
         rows.append(row)
