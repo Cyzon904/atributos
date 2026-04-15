@@ -435,6 +435,11 @@ if 'df_final' in st.session_state:
         
         if "Tipo de Atendimento" in df.columns and "Status do atendimento" in df.columns:
             st.plotly_chart(plot_stack(df.dropna(subset=["Tipo de Atendimento", "Status do atendimento"]), "Tipo de Atendimento", "Status do atendimento", "3. Status por Tipo de atendimento", qtd_cross), use_container_width=True)
+        
+        st.divider()
+        
+        if "Motivo de Contato" in df.columns and "Motivo 2 (Se houver)" in df.columns:
+            st.plotly_chart(plot_stack(df.dropna(subset=["Motivo de Contato", "Motivo 2 (Se houver)"]), "Motivo de Contato", "Motivo 2 (Se houver)", "4. Cruzamento: Motivo 2 por Motivo 1", qtd_cross), use_container_width=True)
 
     if aba_selecionada == "🔗 Top Motivos":
         col_m1, col_m2 = "Motivo de Contato", "Motivo 2 (Se houver)"
