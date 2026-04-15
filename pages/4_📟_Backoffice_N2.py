@@ -89,26 +89,28 @@ def fetch_n2_tickets(start_date, end_date):
 
 def process_tickets(tickets, admin_map):
     rows = []
-    # Tradução dos estados dos tickets
-    mapa_status = {
-        'submitted': 'Aberto',
-        'in_progress': 'Em Andamento',
-        'waiting_on_customer': 'Aguardando Cliente',
-        'blocked': 'Bloqueado',
-        'resolved': 'Finalizado',
-        'closed': 'Fechado'
-    }
-    
     for t in tickets:
+        attrs = t.get('ticket_attributes', {})
         admin_id = t.get('admin_assignee_id')
+        
+        # Puxa a conversa vinculada, se houver
+        linked = t.get('linked_objects', {}).get('data', [])
+        conversa_id = linked[0]['id'] if linked else None
+        link_conversa = f"https://app.intercom.com/a/inbox/{WORKSPACE_ID}/inbox/conversation/{conversa_id}" if conversa_id else "Sem vínculo"
+
         row = {
-            "ID": t.get('id'),
-            "Assunto": t.get('ticket_attributes', {}).get('subject', 'Sem Assunto'),
+            "ID Ticket": t.get('ticket_id'), # Usa o ID curto (92657184)
+            "Assunto": attrs.get('_default_title_', 'Sem Assunto'),
             "Data Criação": (datetime.fromtimestamp(t['created_at']) - timedelta(hours=3)).strftime("%d/%m/%Y %H:%M"),
-            "Status": mapa_status.get(t.get('state'), t.get('state')),
-            "Analista": admin_map.get(str(admin_id), "Não atribuído"),
-            "Link": f"https://app.intercom.com/a/inbox/{WORKSPACE_ID}/tickets/{t.get('id')}",
-            "Ultima Atualização": (datetime.fromtimestamp(t['updated_at']) - timedelta(hours=3)).strftime("%d/%m/%Y %H:%M")
+            "Status": t.get('ticket_state_internal_label', t.get('ticket_state')), # Usa o label traduzido
+            "Analista N2": admin_map.get(str(admin_id), "Não atribuído"),
+            "Criado por": attrs.get('Criado por', 'N/A'),
+            "Plataforma": attrs.get('Plataforma', '-'),
+            "Severidade": attrs.get('Severidade', '-'),
+            "Empresa": attrs.get('Nome da Empresa', '-'),
+            "Jira": attrs.get('Chamado no Jira', '-'),
+            "Link Ticket": f"https://app.intercom.com/a/inbox/{WORKSPACE_ID}/tickets/{t.get('id')}",
+            "Link Conversa Original": link_conversa
         }
         rows.append(row)
     return pd.DataFrame(rows)
