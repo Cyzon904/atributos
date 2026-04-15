@@ -152,6 +152,17 @@ if btn_run:
         
         if raw_data:
             df = process_tickets(raw_data, admins)
+            
+            # --- NOVA LÓGICA DE ORDENAÇÃO FIXA ---
+            # Vermelho vale 0, Verde vale 1 e o restante vale 2
+            prioridade = {'🔴': 0, '🟢': 1, '': 2}
+            df['ordem_prioridade'] = df['SLA'].map(prioridade)
+            
+            # Ordenação pela prioridade e depois pela Data de Criação (mais antigos primeiro)
+            df = df.sort_values(by=['ordem_prioridade', 'Data Criação'], ascending=[True, True])
+            
+            df = df.drop(columns=['ordem_prioridade'])
+            
             st.session_state['df_n2'] = df
         else:
             st.warning("Nenhum ticket encontrado para este período.")
