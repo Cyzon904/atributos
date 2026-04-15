@@ -195,18 +195,51 @@ if btn_run:
             st.warning("Nenhum ticket encontrado para este período.")
 
 if 'df_n2' in st.session_state:
-    df = st.session_state['df_n2']
+    df_completo = st.session_state['df_n2']
+    
+    # --- NOVO FILTRO GLOBAL ---
+    with st.sidebar:
+        st.markdown("### ⚙️ Filtros Globais")
+        
+        # Lista fixa do time de atendimento
+        time_atendimento = [
+            'rhayslla.junca@produttivo.com.br',
+            'douglas.david@produttivo.com.br',
+            'aline.souza@produttivo.com.br',
+            'danielle.ghesini@produttivo.com.br',
+            'jenyffer.souza@produttivo.com.br',
+            'marcelo.misugi@produttivo.com.br',
+            'heloisa.atm.slv@produttivo.com.br',
+            'bruno.braga@produttivo.com.br'
+        ]
+        
+        criadores_unicos = sorted(df_completo['Criado por'].astype(str).unique())
+        
+        # Garante que o painel só marque como padrão os e-mails que realmente estão na busca atual
+        padrao_selecionado = [email for email in time_atendimento if email in criadores_unicos]
+        
+        # Cria o filtro já com o time preenchido
+        sel_criadores = st.multiselect(
+            "👤 Aberto por (Time de Atendimento):", 
+            options=criadores_unicos,
+            default=padrao_selecionado
+        )
+
+    # Aplica o filtro no dataframe que será usado no resto do painel
+    df = df_completo.copy()
+    if sel_criadores:
+        df = df[df['Criado por'].isin(sel_criadores)]
     
     # KPIs Rápidos
     k1, k2, k3, k4 = st.columns(4)
     total = len(df)
     
-    # Atualizado para ler a coluna "Status Intercom"
+    # Atualizado para ler a coluna "Status Intercom" e incluir novos status de resolução
     abertos = len(df[df['Status Intercom'].isin(['Aberto', 'Em andamento', 'Em Andamento', 'Em Análise N2'])])
-    resolvidos = len(df[df['Status Intercom'].isin(['Resolvido', 'Fechado'])])
+    resolvidos = len(df[df['Status Intercom'].isin(['Resolvido', 'Fechado', 'Concluído', 'Concluído N2'])])
     
     k1.metric("Total de Tickets", total)
-    k1.caption("No período selecionado")
+    k1.caption("Após filtros")
     k2.metric("Ativos (Aberto/Work)", abertos)
     k3.metric("Resolvidos", resolvidos) 
     k4.metric("Taxa de Conclusão", f"{(resolvidos/total*100):.1f}%" if total > 0 else "0%")
@@ -224,17 +257,22 @@ if 'df_n2' in st.session_state:
             'Em Andamento': '#636efa',
             'Em Análise N2': '#feca57',
             'Resolvido': '#00cc96',
-            'Fechado': '#00cc96'
+            'Fechado': '#00cc96',
+            'Concluído': '#00cc96',
+            'Concluído N2': '#00cc96'
         }
-        # Atualizado para usar "Status Intercom" no gráfico
-        fig_status = px.pie(df, names='Status Intercom', hole=0.4, color='Status Intercom', color_discrete_map=cores_status)
-        st.plotly_chart(fig_status, use_container_width=True)
+        if not df.empty:
+            fig_status = px.pie(df, names='Status Intercom', hole=0.4, color='Status Intercom', color_discrete_map=cores_status)
+            st.plotly_chart(fig_status, use_container_width=True)
+        else:
+            st.info("Nenhum ticket encontrado com este filtro.")
 
     with col_graf2:
         st.subheader("Carga por Analista")
-        df_adm = df['Analista N2'].value_counts().reset_index()
-        fig_adm = px.bar(df_adm, x='count', y='Analista N2', orientation='h', text='count')
-        st.plotly_chart(fig_adm, use_container_width=True)
+        if not df.empty:
+            df_adm = df['Analista N2'].value_counts().reset_index()
+            fig_adm = px.bar(df_adm, x='count', y='Analista N2', orientation='h', text='count')
+            st.plotly_chart(fig_adm, use_container_width=True)
 
     st.subheader("📋 Lista Detalhada")
     st.dataframe(
