@@ -282,20 +282,19 @@ if 'df_n2' in st.session_state:
     df = df_completo.copy()
     if sel_criadores:
         df = df[df['Criado por'].isin(sel_criadores)]
+        
+    # Limpeza da base para garantir que o backlog só tenha tickets realmente ativos
+    status_ativos = ['Aberto', 'Em andamento', 'Em Andamento', 'Em Análise N2']
+    df = df[(df['Origem'] == 'Período') | ((df['Origem'] == 'Backlog') & (df['Status Intercom'].isin(status_ativos)))]
     
-    # Crio 5 colunas agora para acomodar o novo indicador
+    # Crio as caixinhas com os números rápidos para bater o olho e ver como estamos
     k1, k2, k3, k4, k5 = st.columns(5)
     total = len(df)
     
-    # Faço uma lista com os status que consideramos como abertos
-    status_abertos = ['Aberto', 'Em andamento', 'Em Andamento', 'Em Análise N2']
-    
-    # Conto os abertos separando pela coluna Origem
-    abertos_periodo = len(df[(df['Status Intercom'].isin(status_abertos)) & (df['Origem'] == 'Período')])
-    abertos_backlog = len(df[(df['Status Intercom'].isin(status_abertos)) & (df['Origem'] == 'Backlog')])
+    abertos_periodo = len(df[(df['Status Intercom'].isin(status_ativos)) & (df['Origem'] == 'Período')])
+    abertos_backlog = len(df[(df['Status Intercom'].isin(status_ativos)) & (df['Origem'] == 'Backlog')])
     
     resolvidos = len(df[df['Status Intercom'].isin(['Resolvido', 'Fechado', 'Concluído', 'Concluído N2'])])
-    
     k1.metric("Total de Tickets", total)
     k1.caption("Após filtros")
     
