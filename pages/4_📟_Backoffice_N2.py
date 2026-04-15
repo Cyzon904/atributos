@@ -95,7 +95,12 @@ def process_tickets(tickets, admin_map):
     for t in tickets:
         attrs = t.get('ticket_attributes', {})
         admin_id = t.get('admin_assignee_id')
-        status_atual = t.get('ticket_state_internal_label', t.get('ticket_state'))
+        # --- CORREÇÃO DE STATUS FANTASMA ---
+        # Se o sistema diz que está encerrado (open: false), forçamos para "Fechado"
+        if t.get('open') is False:
+            status_atual = 'Fechado'
+        else:
+            status_atual = t.get('ticket_state_internal_label', t.get('ticket_state'))
         
         # Datas ajustadas para o fuso (-3h)
         dt_criacao_raw = datetime.fromtimestamp(t['created_at']) - timedelta(hours=3)
@@ -111,7 +116,9 @@ def process_tickets(tickets, admin_map):
         
         # Data de Finalização
         data_finalizacao = "-"
-        if status_atual in ['Resolvido', 'Fechado']:
+        status_conclusao = ['Resolvido', 'Fechado', 'Concluído', 'Concluído N2']
+        
+        if status_atual in status_conclusao or t.get('open') is False:
             data_finalizacao = dt_update_raw.strftime("%d/%m/%Y %H:%M")
 
         # --- NOVA LÓGICA: Buscar o Status do Jira ---
