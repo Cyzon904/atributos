@@ -438,8 +438,51 @@ if 'df_final' in st.session_state:
         
         st.divider()
         
+        st.subheader("🔍 Investigação de Motivos (1 vs 2)")
+        
         if "Motivo de Contato" in df.columns and "Motivo 2 (Se houver)" in df.columns:
-            st.plotly_chart(plot_stack(df.dropna(subset=["Motivo de Contato", "Motivo 2 (Se houver)"]), "Motivo de Contato", "Motivo 2 (Se houver)", "4. Cruzamento: Motivo 2 por Motivo 1", qtd_cross), use_container_width=True)
+            # Filtra apenas conversas que têm os dois motivos preenchidos
+            df_mots = df.dropna(subset=["Motivo de Contato", "Motivo 2 (Se houver)"])
+            
+            if not df_mots.empty:
+                c_dir1, c_dir2 = st.columns([1, 2])
+                with c_dir1:
+                    direcao = st.radio("Analisar a partir do:", ["Motivo Principal", "Motivo 2 (Secundário)"])
+                
+                # Define quem é a origem e quem é o destino com base na escolha
+                col_origem = "Motivo de Contato" if "Principal" in direcao else "Motivo 2 (Se houver)"
+                col_destino = "Motivo 2 (Se houver)" if "Principal" in direcao else "Motivo de Contato"
+                
+                with c_dir2:
+                    opcoes_origem = sorted(df_mots[col_origem].unique())
+                    motivo_selecionado = st.selectbox(f"Selecione um {col_origem} para investigar:", opcoes_origem)
+                
+                # Filtra os dados apenas para o motivo escolhido
+                df_foco = df_mots[df_mots[col_origem] == motivo_selecionado]
+                resumo_foco = df_foco[col_destino].value_counts().reset_index()
+                resumo_foco.columns = [col_destino, "Quantidade"]
+                
+                # Calcula a porcentagem para mostrar no gráfico
+                total_foco = resumo_foco["Quantidade"].sum()
+                resumo_foco["Label"] = resumo_foco["Quantidade"].astype(str) + " (" + (resumo_foco["Quantidade"] / total_foco * 100).round(1).astype(str) + "%)"
+                
+                # Ajusta a altura dinamicamente para não ficar espremido
+                h_foco = max(400, len(resumo_foco) * 45)
+                
+                fig_foco = px.bar(
+                    resumo_foco, 
+                    y=col_destino, 
+                    x="Quantidade", 
+                    orientation="h", 
+                    text="Label",
+                    title=f"Quando o {col_origem} é '{motivo_selecionado}', estes são os desdobramentos:",
+                    height=h_foco,
+                    color_discrete_sequence=['#4C51BF'] # Azul profissional, sem arco-íris
+                )
+                fig_foco.update_layout(yaxis={'categoryorder':'total ascending'})
+                st.plotly_chart(fig_foco, use_container_width=True)
+            else:
+                st.info("Não há conversas no período filtrado que tenham os dois motivos preenchidos ao mesmo tempo.")
 
     if aba_selecionada == "🔗 Top Motivos":
         col_m1, col_m2 = "Motivo de Contato", "Motivo 2 (Se houver)"
