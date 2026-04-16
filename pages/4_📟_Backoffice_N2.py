@@ -312,7 +312,8 @@ if 'df_n2' in st.session_state:
 
     st.divider()
 
-    col_graf1, col_graf2 = st.columns(2)
+    # Ajustei para 3 colunas para caber o novo gráfico
+    col_graf1, col_graf2, col_graf3 = st.columns(3)
 
     with col_graf1:
         st.subheader("Situação dos Tickets")
@@ -340,6 +341,15 @@ if 'df_n2' in st.session_state:
             df_adm = df['Analista N2'].value_counts().reset_index()
             fig_adm = px.bar(df_adm, x='count', y='Analista N2', orientation='h', text='count')
             st.plotly_chart(fig_adm, use_container_width=True)
+
+    with col_graf3:
+        st.subheader("Plataforma")
+        if not df.empty:
+            # Gráfico de rosca simples puxando a coluna Plataforma
+            fig_plat = px.pie(df, names='Plataforma', hole=0.4)
+            st.plotly_chart(fig_plat, use_container_width=True)
+        else:
+            st.info("Nenhum ticket encontrado com este filtro.")
 
     st.divider()
 
