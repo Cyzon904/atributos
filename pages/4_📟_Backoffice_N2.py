@@ -331,6 +331,10 @@ if 'df_n2' in st.session_state:
         }
         if not df.empty:
             fig_status = px.pie(df, names='Status Intercom', hole=0.4, color='Status Intercom', color_discrete_map=cores_status)
+            
+            # ADICIONE ESTA LINHA: Mostra o valor absoluto e a porcentagem dentro do gráfico
+            fig_status.update_traces(textinfo='value+percent')
+            
             st.plotly_chart(fig_status, use_container_width=True)
         else:
             st.info("Nenhum ticket encontrado com este filtro.")
@@ -347,6 +351,10 @@ if 'df_n2' in st.session_state:
         if not df.empty:
             # Gráfico de rosca simples puxando a coluna Plataforma
             fig_plat = px.pie(df, names='Plataforma', hole=0.4)
+            
+            # ADICIONE ESTA LINHA: Mostra o valor absoluto e a porcentagem dentro do gráfico
+            fig_plat.update_traces(textinfo='value+percent')
+            
             st.plotly_chart(fig_plat, use_container_width=True)
         else:
             st.info("Nenhum ticket encontrado com este filtro.")
