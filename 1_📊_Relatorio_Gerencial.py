@@ -475,7 +475,7 @@ if 'df_final' in st.session_state:
                     x="Quantidade", 
                     orientation="h", 
                     text="Label",
-                    title=f"Quando o {col_origem} é '{motivo_selecionado}', estes são os desdobramentos:",
+                    title=f"Quando o {col_origem} é '{motivo_selecionado}', estes são as classificações:",
                     height=h_foco,
                     color_discrete_sequence=['#4C51BF'] # Azul profissional, sem arco-íris
                 )
