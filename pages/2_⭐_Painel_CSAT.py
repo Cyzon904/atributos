@@ -135,7 +135,7 @@ with st.form("filtro_csat_individual"):
     col1, col2, col3 = st.columns([2, 2, 1])
     
     with col1:
-        admin_ids = list(admins.keys())
+        admin_ids = sorted(list(admins.keys()), key=lambda id: admins[id])
         # O usuário vê o nome na tela, mas o código usa o ID para a busca
         admin_selecionado_id = st.selectbox(
             "👤 Seu Nome:", 
