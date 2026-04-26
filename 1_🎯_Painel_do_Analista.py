@@ -297,6 +297,9 @@ if 'dados_performance' in st.session_state:
         
         if taxa < 90:
             st.warning(f"Atenção, {nome_atual}! Faltam **{int(((0.9 * total_class) - classificados)) + 1}** conversas para bater 90%.")
+        else:
+            st.balloons()
+            st.success("Parabéns! Meta de classificação batida!")
         
         with st.expander("Ver lista de classificações"):
             tab_pendentes, tab_todos = st.tabs(["🚨 Pendências", "📋 Histórico"])
