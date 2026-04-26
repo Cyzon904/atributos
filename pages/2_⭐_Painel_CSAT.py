@@ -4,7 +4,7 @@ import time
 from datetime import datetime, timezone, timedelta, time as dt_time
 from utils import check_password, make_api_request
 
-# Configurações Iniciais
+# --- Configurações Iniciais ---
 st.set_page_config(page_title="Meu CSAT", page_icon="⭐", layout="wide")
 
 # Bloqueio de segurança
@@ -20,16 +20,28 @@ except KeyError:
 
 FUSO_BR = timezone(timedelta(hours=-3))
 
-# Funções de Busca
+# Lista dos times que podem aparecer no painel
+TIMES_PERMITIDOS_IDS = [2975006, 1972225]
+
+# --- Funções de Busca ---
 
 @st.cache_data(ttl=60, show_spinner=False)
 def get_admin_names(): 
-    """Busca os nomes dos admins para o menu de seleção."""
+    """Busca os nomes dos admins e filtra apenas os que pertencem aos times permitidos."""
     url = "https://api.intercom.io/admins"
     data = make_api_request("GET", url)
+    
+    admins_filtrados = {}
     if data:
-        return {a['id']: a['name'] for a in data.get('admins', [])}
-    return {}
+        for a in data.get('admins', []):
+            # Pega a lista de times do atendente, se não tiver, cria uma lista vazia
+            admin_teams = a.get('team_ids', [])
+            
+            # Verifica se o atendente está em pelo menos um dos times da nossa lista
+            if any(team_id in TIMES_PERMITIDOS_IDS for team_id in admin_teams):
+                admins_filtrados[a['id']] = a['name']
+                
+    return admins_filtrados
 
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_individual_csat_data(start_ts, end_ts, admin_id):
