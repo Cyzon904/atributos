@@ -1,295 +1,218 @@
 import streamlit as st
 import pandas as pd
-import requests
 import time
-from datetime import datetime, timedelta
-import sys
-import os
+from datetime import datetime, timezone, timedelta, time as dt_time
+from utils import check_password, make_api_request
 
-# --- IMPORTAÇÃO DO UTILS ---
-# Ajuste de caminho para garantir que utils.py seja encontrado
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# --- Configurações Iniciais ---
+st.set_page_config(page_title="Meu CSAT", page_icon="⭐", layout="wide")
 
+# Bloqueio de segurança
+if not check_password():
+    st.stop()
+
+# Recuperação de segredos
 try:
-    from utils import check_password, logout_button
-except ImportError:
-    st.error("Erro: utils.py não encontrado. Verifique se o arquivo está na pasta raiz.")
+    APP_ID = st.secrets["INTERCOM_APP_ID"]
+except KeyError:
+    st.error("Erro: Configure 'INTERCOM_APP_ID' no arquivo .streamlit/secrets.toml")
     st.stop()
 
-# --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="Minhas Metas", page_icon="🎯", layout="wide")
+FUSO_BR = timezone(timedelta(hours=-3))
 
-# --- LOGIN ---
-nivel_acesso = check_password()
-if not nivel_acesso:
-    st.stop()
-
-# --- CONFIGURAÇÕES DO INTERCOM ---
-WORKSPACE_ID = "xwvpdtlu"
-
-try:
-    INTERCOM_ACCESS_TOKEN = st.secrets["INTERCOM_TOKEN"]
-except:
-    INTERCOM_ACCESS_TOKEN = st.sidebar.text_input("Intercom Token", type="password", key="token_analista_manual")
-
-if not INTERCOM_ACCESS_TOKEN:
-    st.warning("⚠️ Token não configurado.")
-    st.stop()
-
-HEADERS = {"Authorization": f"Bearer {INTERCOM_ACCESS_TOKEN}", "Accept": "application/json"}
-
-logout_button()
-
-# --- CONFIGURAÇÃO DE FILTROS FIXOS ---
+# Lista dos times que podem aparecer no painel
 TIMES_PERMITIDOS_IDS = [2975006, 1972225]
 
-# --- FUNÇÕES ---
+# --- Funções de Busca ---
 
-@st.cache_data(ttl=3600)
-def get_teams_list():
-    """Busca a lista de times (ID -> Nome)"""
-    url = "https://api.intercom.io/teams"
-    try:
-        r = requests.get(url, headers=HEADERS)
-        teams = r.json().get('teams', [])
-        return {t['name']: t['id'] for t in teams}
-    except:
-        return {}
-
-@st.cache_data(ttl=3600)
-def get_admin_list():
-    """Busca lista de analistas e seus times"""
+@st.cache_data(ttl=60, show_spinner=False)
+def get_admin_names(): 
+    """Busca os nomes dos admins e filtra apenas os que pertencem aos times permitidos."""
     url = "https://api.intercom.io/admins"
-    try:
-        r = requests.get(url, headers=HEADERS)
-        admins = r.json().get('admins', [])
-        
-        dados_admins = {}
-        for a in admins:
-            # Filtra apenas quem tem ID e Nome
-            if a.get('id') and a.get('name'):
-                dados_admins[a['name']] = {
-                    'id': a['id'],
-                    'team_ids': [int(tid) for tid in a.get('team_ids', [])]
-                }
-        return dados_admins
-    except:
-        return {}
+    data = make_api_request("GET", url)
+    
+    admins_filtrados = {}
+    if data:
+        for a in data.get('admins', []):
+            # Pega a lista de times do atendente, se não tiver, cria uma lista vazia
+            admin_teams = a.get('team_ids', [])
+            
+            # Verifica se o atendente está em pelo menos um dos times da nossa lista
+            if any(team_id in TIMES_PERMITIDOS_IDS for team_id in admin_teams):
+                admins_filtrados[a['id']] = a['name']
+                
+    return admins_filtrados
 
-@st.cache_data(ttl=3600)
-def get_attribute_definitions():
-    url = "https://api.intercom.io/data_attributes"
-    params = {"model": "conversation"}
-    try:
-        r = requests.get(url, headers=HEADERS, params=params)
-        return {item['name']: item['label'] for item in r.json().get('data', [])}
-    except:
-        return {}
-
-def fetch_my_conversations(start_date, end_date, admin_id):
+@st.cache_data(ttl=60, show_spinner=False)
+def fetch_individual_csat_data(start_ts, end_ts, admin_id):
+    """Busca as conversas filtrando direto pelo ID do analista."""
     url = "https://api.intercom.io/conversations/search"
-    ts_start = int(datetime.combine(start_date, datetime.min.time()).timestamp())
-    ts_end = int(datetime.combine(end_date, datetime.max.time()).timestamp())
-    
-    # 1. Filtros da API (O Grosso)
-    query_rules = [
-        {"field": "created_at", "operator": ">", "value": ts_start},
-        {"field": "created_at", "operator": "<", "value": ts_end},
-        {"field": "admin_assignee_id", "operator": "=", "value": admin_id},
-        {"field": "state", "operator": "=", "value": "closed"},
-        {"field": "team_assignee_id", "operator": "IN", "value": TIMES_PERMITIDOS_IDS}
-    ]
-    
     payload = {
-        "query": {"operator": "AND", "value": query_rules},
+        "query": {
+            "operator": "AND",
+            "value": [
+                {"field": "updated_at", "operator": ">", "value": start_ts},
+                {"field": "updated_at", "operator": "<", "value": end_ts},
+                {"field": "admin_assignee_id", "operator": "=", "value": admin_id}
+            ]
+        },
         "pagination": {"per_page": 150}
     }
     
-    conversas_validas = [] # Lista final limpa
-    has_more = True
+    conversas = []
+    data = make_api_request("POST", url, json=payload)
+    if not data: return []
     
-    bar = st.progress(0, text="Buscando conversas fechadas...")
+    total = data.get('total_count', 0)
+    conversas.extend(data.get('conversations', []))
     
-    while has_more:
-        try:
-            resp = requests.post(url, headers=HEADERS, json=payload)
-            data = resp.json()
-            batch = data.get('conversations', [])
-            
-            # --- FILTRO FINO (PYTHON) ---
-            # Aqui jogamos fora o que é Backoffice
-            for c in batch:
-                attrs = c.get('custom_attributes', {})
-                categoria = attrs.get('Ticket category')
-                
-                # SE FOR BACKOFFICE, PULA! (IGNORA)
-                if categoria == "Back-office ticket":
-                    continue 
-                
-                # Se passou no teste, adiciona na lista
-                conversas_validas.append(c)
-            
-            bar.progress(50, text=f"Baixado: {len(conversas_validas)} conversas válidas...")
-            
-            if data.get('pages', {}).get('next'):
-                payload['pagination']['starting_after'] = data['pages']['next']['starting_after']
-                time.sleep(0.1)
+    if total > 0:
+        while data.get('pages', {}).get('next'):
+            time.sleep(0.2)
+            payload['pagination']['starting_after'] = data['pages']['next']['starting_after']
+            data = make_api_request("POST", url, json=payload)
+            if data:
+                conversas.extend(data.get('conversations', []))
             else:
-                has_more = False
-        except:
-            break
+                break
             
-    bar.empty()
-    return conversas_validas
+    return conversas
 
-# --- INTERFACE DO ANALISTA ---
-
-st.title("🎯 Painel do Analista: Minha Performance")
-st.markdown("Acompanhe sua meta de classificação (Apenas conversas **fechadas** dos times de **Suporte**).")
-
-# Carrega dados básicos (Cacheado)
-dados_admins = get_admin_list()
-
-if dados_admins:
-    # --- FILTRAGEM DE ANALISTAS ---
-    analistas_filtrados = []
-    for nome, dados in dados_admins.items():
-        # Verifica interseção de times (Se o analista pertence a algum time permitido)
-        if set(dados['team_ids']) & set(TIMES_PERMITIDOS_IDS):
-            analistas_filtrados.append(nome)
-            
-    analistas_filtrados = sorted(analistas_filtrados)
-
-    if not analistas_filtrados:
-        st.error(f"Nenhum analista encontrado nos times {TIMES_PERMITIDOS_IDS}.")
-        st.stop()
-
-    # --- INPUTS ---
-    with st.form("form_filtros_analista"):
-        col_analista, col_periodo, col_btn = st.columns([2, 2, 1])
+def process_individual_stats(conversas, start_ts, end_ts):
+    """Gera as estatísticas de um único analista."""
+    stats = {'pos': 0, 'neu': 0, 'neg': 0, 'total': 0}
+    details_list = []
+    
+    for c in conversas:
+        if not c.get('conversation_rating'): continue
         
-        with col_analista:
-            usuario_selecionado = st.selectbox("👤 Quem é você?", analistas_filtrados, key="sel_analista")
+        rating_obj = c['conversation_rating']
+        nota = rating_obj.get('rating')
+        if nota is None: continue
         
-        with col_periodo:
-            data_hoje = datetime.now()
-            periodo = st.date_input("Período:", (data_hoje - timedelta(days=7), data_hoje), format="DD/MM/YYYY")
+        data_nota = rating_obj.get('created_at')
+        if not data_nota: continue
         
-        with col_btn:
-            st.write("") 
-            st.write("") 
-            # Dentro de um form, usamos form_submit_button no lugar de button
-            btn_atualizar = st.form_submit_button("🔄 Atualizar", type="primary", use_container_width=True)
-
-    # --- LÓGICA DE BUSCA (SÓ RODA SE APERTAR O BOTÃO) ---
-    if btn_atualizar:
-        if usuario_selecionado:
-            admin_id_alvo = dados_admins[usuario_selecionado]['id']
-            start, end = periodo
-            
-            with st.spinner("Analisando métricas..."):
-                raw = fetch_my_conversations(start, end, admin_id_alvo)
-                mapa_attrs = get_attribute_definitions()
-            
-            if raw:
-                rows = []
-                for c in raw:
-                    attrs = c.get('custom_attributes', {})
-                    
-                    motivo = None
-                    # Tenta achar o motivo pelo nome bonito ou pela chave
-                    for k, v in attrs.items():
-                        label = mapa_attrs.get(k, k)
-                        if label == "Motivo de Contato":
-                            motivo = v
-                            break
-                    
-                    link = f"https://app.intercom.com/a/inbox/{WORKSPACE_ID}/inbox/conversation/{c['id']}"
-                    
-                    rows.append({
-                        "ID": c['id'],
-                        "Data": datetime.fromtimestamp(c['created_at']).strftime("%d/%m/%Y %H:%M"),
-                        "Motivo": motivo,
-                        "Link": link,
-                        "Status": "✅ Classificado" if motivo else "🚨 Pendente"
-                    })
-                
-                # Salva no Session State para não sumir ao trocar de aba
-                st.session_state['df_analista_resultado'] = pd.DataFrame(rows)
-                st.session_state['analista_nome_atual'] = usuario_selecionado
-                st.success("Dados atualizados!")
-            else:
-                st.session_state['df_analista_resultado'] = pd.DataFrame() # DataFrame Vazio
-                st.session_state['analista_nome_atual'] = usuario_selecionado
-                st.warning("Nenhuma conversa encontrada neste período para os times selecionados.")
-
-    # --- EXIBIÇÃO DOS RESULTADOS (LÊ DA MEMÓRIA) ---
-    if 'df_analista_resultado' in st.session_state and not st.session_state['df_analista_resultado'].empty:
+        if not (start_ts <= data_nota <= end_ts): continue
         
-        df = st.session_state['df_analista_resultado']
-        nome_atual = st.session_state.get('analista_nome_atual', 'Analista')
-
-        # Só exibe se o DataFrame tiver dados
-        total = len(df)
-        classificados = len(df[df["Motivo"].notna()])
-        pendentes = total - classificados
-        taxa = (classificados / total * 100) if total > 0 else 0
+        stats['total'] += 1
         
-        st.divider()
-        
-        k1, k2, k3 = st.columns(3)
-        
-        k1.metric("Conversas de Suporte", total)
-        
-        k2.metric(
-            "Pendentes de Classificação", 
-            pendentes, 
-            delta="-Zerado!" if pendentes == 0 else f"{pendentes} para fazer",
-            delta_color="inverse"
-        )
-        
-        # Cor dinâmica da meta
-        cor_meta = "normal" if taxa >= 90 else "inverse"
-        k3.metric(
-            "Minha Taxa", 
-            f"{taxa:.1f}%", 
-            delta="Meta: 90%",
-            delta_color=cor_meta 
-        )
-
-        st.write("Progresso da Meta:")
-        # Barra de progresso visual
-        st.progress(min(taxa / 100, 1.0))
-        
-        if taxa < 90:
-            st.warning(f"⚠️ Atenção, {nome_atual}! Faltam **{int(((0.9 * total) - classificados)) + 1}** conversas para bater 90%.")
+        label_nota = ""
+        if nota >= 4:
+            stats['pos'] += 1; label_nota = "😍 Positiva" 
+        elif nota == 3:
+            stats['neu'] += 1; label_nota = "😐 Neutra" 
         else:
-            st.balloons()
-            st.success(f"🎉 Parabéns! Meta batida!")
+            stats['neg'] += 1; label_nota = "😡 Negativa"
 
-        st.divider()
-
-        tab_pendentes, tab_todos = st.tabs(["🚨 Pendências", "📋 Histórico"])
+        dt_evento = datetime.fromtimestamp(data_nota, tz=FUSO_BR).strftime("%d/%m %H:%M")
+        comentario = rating_obj.get('remark', '-')
+        link_url = f"https://app.intercom.com/a/inbox/{APP_ID}/inbox/conversation/{c['id']}"
         
-        with tab_pendentes:
-            df_pendentes = df[df["Status"] == "🚨 Pendente"]
-            if not df_pendentes.empty:
-                st.error(f"Você tem **{len(df_pendentes)} conversas fechadas** sem motivo classificado.")
-                st.dataframe(
-                    df_pendentes[["Data", "ID", "Link"]],
-                    use_container_width=True,
-                    column_config={"Link": st.column_config.LinkColumn("Link", display_text="🔗 Abrir no Intercom")},
-                    hide_index=True
-                )
-            else:
-                st.success("Tudo limpo! Nenhuma pendência encontrada. 🚀")
+        details_list.append({
+            "Data": dt_evento,
+            "Nota": nota,
+            "Tipo": label_nota,
+            "Comentário": comentario,
+            "Link": link_url
+        })
+            
+    return stats, details_list
 
-        with tab_todos:
-            st.dataframe(
-                df[["Data", "ID", "Motivo", "Status", "Link"]],
-                use_container_width=True,
-                column_config={"Link": st.column_config.LinkColumn("Link", display_text="Abrir")},
-                hide_index=True
-            )
+# Interface Visual
+
+st.title("⭐ Meu Painel de Qualidade (CSAT)")
+st.caption("Acompanhe os seus indicadores de qualidade.")
+
+# Carrega a lista de analistas antes de montar o formulário
+admins = get_admin_names()
+
+if not admins:
+    st.warning("Não foi possível carregar a lista de analistas.")
+    st.stop()
+
+with st.form("filtro_csat_individual"):
+    col1, col2, col3 = st.columns([2, 2, 1])
+    
+    with col1:
+        admin_ids = sorted(list(admins.keys()), key=lambda id: admins[id])
+        # O usuário vê o nome na tela, mas o código usa o ID para a busca
+        admin_selecionado_id = st.selectbox(
+            "👤 Seu Nome:", 
+            options=admin_ids, 
+            format_func=lambda x: admins[x]
+        )
+        
+    with col2:
+        periodo = st.date_input(
+            "📅 Período:",
+            value=(datetime.now().replace(day=1), datetime.now()),
+            format="DD/MM/YYYY"
+        )
+        
+    with col3:
+        st.write("") 
+        st.write("")
+        submit_btn = st.form_submit_button("Buscar", type="primary", use_container_width=True)
+
+if submit_btn:
+    ts_start, ts_end = 0, 0
+    if isinstance(periodo, tuple):
+        d_im = periodo[0]
+        d_fm = periodo[1] if len(periodo) > 1 else periodo[0]
+        ts_start = int(datetime.combine(d_im, dt_time.min).timestamp())
+        ts_end = int(datetime.combine(d_fm, dt_time.max).timestamp())
+    else:
+        ts_start = int(datetime.combine(periodo, dt_time.min).timestamp())
+        ts_end = int(datetime.combine(periodo, dt_time.max).timestamp())
+        
+    with st.spinner("Buscando suas avaliações..."):
+        raw_data = fetch_individual_csat_data(ts_start, ts_end, admin_selecionado_id)
+        stats, lista_detalhada = process_individual_stats(raw_data, ts_start, ts_end)
+    
+    st.session_state['dados_csat_ind'] = {
+        'stats': stats,
+        'lista_detalhada': lista_detalhada
+    }
+
+if 'dados_csat_ind' in st.session_state:
+    dados = st.session_state['dados_csat_ind']
+    stats = dados['stats']
+    lista_detalhada = dados['lista_detalhada']
+    
+    total = stats['total']
+    csat_real = (stats['pos'] / total * 100) if total > 0 else 0
+    
+    total_valid = stats['pos'] + stats['neg']
+    csat_adjusted = (stats['pos'] / total_valid * 100) if total_valid > 0 else 0
+
+    st.divider()
+    
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("CSAT Geral", f"{csat_real:.1f}%", f"{total} avaliações")
+    c2.metric("CSAT Ajustado", f"{csat_adjusted:.1f}%", "Sem neutras") 
+    c3.metric("😍 Positivas", stats['pos'])
+    c4.metric("😐 Neutras", stats['neu'])
+    c5.metric("😡 Negativas", stats['neg'])
+    
+    st.divider()
+
+    st.subheader("🔎 Detalhamento das Suas Avaliações")
+
+    if lista_detalhada:
+        df_detalhe = pd.DataFrame(lista_detalhada)
+        
+        st.data_editor(
+            df_detalhe,
+            column_config={
+                "Link": st.column_config.LinkColumn("Ticket", display_text="Abrir"),
+                "Nota": st.column_config.NumberColumn("Nota", format="%d ⭐"),
+                "Comentário": st.column_config.TextColumn("Obs. Cliente", width="medium")
+            },
+            use_container_width=True,
+            hide_index=True
+        )
+    else:
+        st.info("Nenhuma avaliação encontrada neste período.")
 else:
-    st.info("Carregando lista de analistas...")
+    st.info("Escolha seu nome e o período acima para começar.")
