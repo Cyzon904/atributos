@@ -117,12 +117,16 @@ def fetch_my_conversations(ts_start, ts_end, admin_id):
 def fetch_individual_csat_data(ts_start, ts_end, admin_id):
     """Busca as conversas para calcular o CSAT."""
     url = "https://api.intercom.io/conversations/search"
+    
+    # Usa o momento atual para não perder conversas que foram atualizadas em meses seguintes
+    ts_agora = int(datetime.now().timestamp())
+    
     payload = {
         "query": {
             "operator": "AND",
             "value": [
                 {"field": "updated_at", "operator": ">", "value": ts_start},
-                {"field": "updated_at", "operator": "<", "value": ts_end},
+                {"field": "updated_at", "operator": "<", "value": ts_agora}, # Alteração feita aqui
                 {"field": "admin_assignee_id", "operator": "=", "value": admin_id}
             ]
         },
