@@ -335,6 +335,17 @@ if 'dados_performance' in st.session_state:
     c4.metric("😐 Neutras", stats['neu'])
     c5.metric("😡 Negativas", stats['neg'])
 
+    # --- NOVO CÓDIGO DE META ---
+    if total_csat > 0:
+        st.progress(min(csat_real / 100, 1.0))
+        
+        if csat_real >= 97:
+            st.balloons()
+            st.success(f"Parabéns, {nome_atual}! Você bateu a meta de 97% de CSAT Real!")
+        else:
+            st.warning(f"Foco na qualidade, {nome_atual}! Sua meta é alcançar 97% no CSAT Real.")
+    # --------------------------------
+
     if lista_csat:
         with st.expander("Ver detalhamento das avaliações"):
             st.data_editor(
